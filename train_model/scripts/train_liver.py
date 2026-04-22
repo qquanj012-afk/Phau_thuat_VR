@@ -1,5 +1,6 @@
 import sys
 import argparse
+import tensorboard
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
