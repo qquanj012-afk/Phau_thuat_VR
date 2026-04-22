@@ -1,7 +1,7 @@
 import os
 import hashlib
 import numpy as np
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw
 from pathlib import Path
 
 # Thử import thư viện y tế (có thể không có sẵn, xử lý lỗi)
@@ -24,10 +24,11 @@ os.makedirs(THUMBNAIL_CACHE_DIR, exist_ok=True)
 
 def generate_thumbnail(file_path, size=(300, 300)):
     """
-    Tạo ảnh PNG thumbnail từ file ảnh y tế (NIfTI, DICOM) hoặc ảnh thường.
+    Tạo ảnh PNG thumbnail từ nhiều loại file (NIfTI, DICOM, .npy, ảnh thường, .obj).
     Trả về đường dẫn tương đối tới file PNG đã cache (dùng cho web).
     """
     file_path = str(file_path)
+    # Tạo tên cache dựa trên hash của đường dẫn và thời gian sửa đổi
     stat = os.stat(file_path)
     hash_input = f"{file_path}_{stat.st_mtime}_{stat.st_size}"
     cache_key = hashlib.md5(hash_input.encode()).hexdigest()
@@ -48,7 +49,6 @@ def generate_thumbnail(file_path, size=(300, 300)):
         img = Image.new('RGB', size, color=(20, 25, 35))
         draw = ImageDraw.Draw(img)
         text = "3D MESH"
-        # Dùng font mặc định
         bbox = draw.textbbox((0, 0), text)
         text_width = bbox[2] - bbox[0]
         text_height = bbox[3] - bbox[1]
@@ -57,8 +57,30 @@ def generate_thumbnail(file_path, size=(300, 300)):
         img.save(cache_path)
         return cache_url
 
+    # ----- Xử lý file .npy -----
+    if lower.endswith('.npy'):
+        try:
+            data = np.load(file_path)
+            if data.ndim == 4:
+                # Shape (Slices, Height, Width, Channels) → lấy lát giữa, kênh đầu tiên (ảnh CT)
+                slice_idx = data.shape[0] // 2
+                img_array = data[slice_idx, :, :, 0]
+            elif data.ndim == 3:
+                # Có thể là (H, W, C) hoặc (Slices, H, W)
+                if data.shape[0] < data.shape[2]:  # (H, W, C)
+                    img_array = data[:, :, 0]
+                else:  # (Slices, H, W)
+                    slice_idx = data.shape[0] // 2
+                    img_array = data[slice_idx, :, :]
+            elif data.ndim == 2:
+                img_array = data
+            else:
+                img_array = None
+        except Exception as e:
+            print(f"Lỗi đọc .npy {file_path}: {e}")
+
     # NIfTI
-    if NIB_AVAILABLE and (lower.endswith('.nii') or lower.endswith('.nii.gz')):
+    if img_array is None and NIB_AVAILABLE and (lower.endswith('.nii') or lower.endswith('.nii.gz')):
         try:
             img = nib.load(file_path)
             data = img.get_fdata()
@@ -73,7 +95,7 @@ def generate_thumbnail(file_path, size=(300, 300)):
             print(f"Lỗi đọc NIfTI {file_path}: {e}")
 
     # DICOM
-    elif DICOM_AVAILABLE and (lower.endswith('.dcm') or lower.endswith('.dicom')):
+    if img_array is None and DICOM_AVAILABLE and (lower.endswith('.dcm') or lower.endswith('.dicom')):
         try:
             ds = pydicom.dcmread(file_path)
             img_array = ds.pixel_array
@@ -81,7 +103,7 @@ def generate_thumbnail(file_path, size=(300, 300)):
             print(f"Lỗi đọc DICOM {file_path}: {e}")
 
     # Ảnh thông thường (PNG, JPG...)
-    elif lower.endswith(('.png', '.jpg', '.jpeg')):
+    if img_array is None and lower.endswith(('.png', '.jpg', '.jpeg')):
         try:
             pil_img = Image.open(file_path).convert('L')
             img_array = np.array(pil_img)

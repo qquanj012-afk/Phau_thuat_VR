@@ -18,7 +18,7 @@ os.makedirs(TRASH_DIR / 'raw', exist_ok=True)
 os.makedirs(TRASH_DIR / 'processed', exist_ok=True)
 os.makedirs(TRASH_DIR / 'meshes', exist_ok=True)
 
-MEDICAL_EXTS = {'.nii', '.nii.gz', '.dcm', '.dicom', '.mhd', '.mha', '.nrrd', '.png', '.jpg', '.jpeg'}
+MEDICAL_EXTS = {'.nii', '.nii.gz', '.dcm', '.dicom', '.mhd', '.mha', '.nrrd', '.png', '.jpg', '.jpeg', '.npy'}
 MESH_EXTS = {'.obj', '.stl', '.ply', '.glb', '.gltf'}
 
 def count_files(path, extensions):

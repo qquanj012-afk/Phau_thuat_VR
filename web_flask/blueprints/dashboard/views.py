@@ -8,7 +8,7 @@ dashboard_bp = Blueprint('dashboard', __name__, template_folder='../../templates
 # Đường dẫn dữ liệu
 BASE_DIR = Path(__file__).resolve().parent.parent.parent.parent  # web_flask/blueprints/dashboard -> gốc dự án
 BACKEND_DATA_DIR = BASE_DIR / 'data'
-MEDICAL_EXTS = {'.nii', '.nii.gz', '.dcm', '.dicom', '.png', '.jpg', '.jpeg'}
+MEDICAL_EXTS = {'.nii', '.nii.gz', '.dcm', '.dicom', '.png', '.jpg', '.jpeg', '.npy'}
 MESH_EXTS = {'.obj', '.stl', '.ply'}
 
 def count_files_in_dir(path, extensions):
@@ -22,16 +22,16 @@ def count_files_in_dir(path, extensions):
     return total
 
 def get_raw_count():
-    raw_path = BACKEND_DATA_DIR / 'raw' / 'liver'   # Giả định ảnh gan nằm trong raw/liver/
+    raw_path = BACKEND_DATA_DIR / 'raw' / 'liver'
     return count_files_in_dir(raw_path, MEDICAL_EXTS)
 
 def get_processed_count():
-    processed_path = BACKEND_DATA_DIR / 'processed' / 'liver'
-    return count_files_in_dir(processed_path, MEDICAL_EXTS)
+    return count_files_in_dir(BACKEND_DATA_DIR / 'processed' / 'liver', MEDICAL_EXTS) + \
+           count_files_in_dir(BACKEND_DATA_DIR / 'processed' / 'tumor', MEDICAL_EXTS)
 
 def get_mesh_count():
-    mesh_path = BACKEND_DATA_DIR / 'meshes'
-    return count_files_in_dir(mesh_path, MESH_EXTS)
+    return count_files_in_dir(BACKEND_DATA_DIR / 'meshes' / 'liver', MESH_EXTS) + \
+           count_files_in_dir(BACKEND_DATA_DIR / 'meshes' / 'tumor', MESH_EXTS)
 
 def get_daily_counts(directory, extensions, start_date, end_date):
     counts = {}
@@ -94,13 +94,24 @@ def api_timeseries():
         return jsonify({'error': 'Định dạng ngày không hợp lệ'}), 400
 
     raw_dir = BACKEND_DATA_DIR / 'raw' / 'liver'
-    proc_dir = BACKEND_DATA_DIR / 'processed' / 'liver'
-    mesh_dir = BACKEND_DATA_DIR / 'meshes'
+    proc_dir = [
+        BACKEND_DATA_DIR / 'processed' / 'liver',
+        BACKEND_DATA_DIR / 'processed' / 'tumor'
+    ]
+    mesh_dir = [
+        BACKEND_DATA_DIR / 'meshes' / 'liver',
+        BACKEND_DATA_DIR / 'meshes' / 'tumor'
+    ]
 
     raw_counts = get_daily_counts(raw_dir, MEDICAL_EXTS, start_date, end_date)
-    proc_counts = get_daily_counts(proc_dir, MEDICAL_EXTS, start_date, end_date)
-    mesh_counts = get_daily_counts(mesh_dir, MESH_EXTS, start_date, end_date)
-
+    proc_counts = {}
+    for d in proc_dir:
+        for day, cnt in get_daily_counts(d, MEDICAL_EXTS, start_date, end_date).items():
+            proc_counts[day] = proc_counts.get(day, 0) + cnt
+    mesh_counts = {}
+    for d in mesh_dir:
+        for day, cnt in get_daily_counts(d, MESH_EXTS, start_date, end_date).items():
+            mesh_counts[day] = mesh_counts.get(day, 0) + cnt
     all_days = []
     current = start_date
     while current < end_date:

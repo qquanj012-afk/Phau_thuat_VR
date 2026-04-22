@@ -18,7 +18,6 @@ document.addEventListener('DOMContentLoaded', function() {
     if (tabId === 'trash') {
       loadTrashItems();
     } else {
-      // Khi chuyển tab, áp dụng lại bộ lọc hiện tại
       filterCards();
     }
   };
@@ -35,7 +34,228 @@ document.addEventListener('DOMContentLoaded', function() {
     window.location = url.toString();
   });
 
-  /* MODAL STATE */
+  /* ─────────────────────────────────────────────────────────────
+   * THREE.JS OBJ VIEWER
+   * FIX BUG 1: model-viewer không được import → không render gì
+   * FIX BUG 2: model-viewer không đọc .obj, chỉ đọc .gltf/.glb
+   * FIX BUG 3: không có cleanup → memory leak
+   * ───────────────────────────────────────────────────────────── */
+  let threeCleanup = null;   // FIX BUG 3: lưu hàm cleanup
+
+  function initOBJViewer(container, objUrl, filename) {
+    // Cleanup scene cũ nếu có (FIX BUG 3)
+    if (threeCleanup) { threeCleanup(); threeCleanup = null; }
+
+    // Wrapper div
+    const wrapper = document.createElement('div');
+    wrapper.style.cssText = [
+      'width:100%', 'height:70vh', 'position:relative',
+      'background:#0d1117', 'border-radius:8px', 'overflow:hidden'
+    ].join(';');
+    container.appendChild(wrapper);
+
+    // Loading overlay
+    const loading = document.createElement('div');
+    loading.style.cssText = [
+      'position:absolute', 'inset:0', 'display:flex', 'flex-direction:column',
+      'align-items:center', 'justify-content:center',
+      'color:#00d4aa', 'font-family:monospace', 'font-size:0.85rem',
+      'background:#0d1117', 'z-index:10', 'gap:12px'
+    ].join(';');
+    loading.innerHTML = `
+      <div style="font-size:2rem">◈</div>
+      <div>Đang tải mesh 3D…</div>
+      <div style="color:#5a6280;font-size:0.75rem">${filename}</div>
+    `;
+    wrapper.appendChild(loading);
+
+    // Hint controls (hiện sau khi load xong)
+    const hint = document.createElement('div');
+    hint.style.cssText = [
+      'position:absolute', 'bottom:12px', 'left:50%', 'transform:translateX(-50%)',
+      'color:#5a6280', 'font-family:monospace', 'font-size:0.72rem',
+      'background:rgba(0,0,0,0.6)', 'padding:4px 12px', 'border-radius:20px',
+      'pointer-events:none', 'opacity:0', 'transition:opacity 0.5s', 'z-index:5'
+    ].join(';');
+    hint.textContent = '🖱 Kéo để xoay · Scroll để zoom · Chuột phải để di chuyển';
+    wrapper.appendChild(hint);
+
+    /* ── Scene ── */
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x0d1117);
+
+    /* ── Camera ── */
+    const W = wrapper.clientWidth || 600;
+    const H = wrapper.clientHeight || 400;
+    const camera = new THREE.PerspectiveCamera(45, W / H, 0.001, 2000);
+    camera.position.set(0, 0, 5);
+
+    /* ── Renderer ── */
+    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.setSize(W, H);
+    renderer.shadowMap.enabled = true;
+    wrapper.appendChild(renderer.domElement);
+
+    /* ── Lights ── */
+    scene.add(new THREE.AmbientLight(0xffffff, 0.7));
+
+    const dir1 = new THREE.DirectionalLight(0xffffff, 0.9);
+    dir1.position.set(3, 5, 5);
+    scene.add(dir1);
+
+    const dir2 = new THREE.DirectionalLight(0x00d4aa, 0.4);
+    dir2.position.set(-4, -2, -3);
+    scene.add(dir2);
+
+    const rim = new THREE.DirectionalLight(0xffffff, 0.3);
+    rim.position.set(0, -5, -5);
+    scene.add(rim);
+
+    /* ── Controls ── */
+    const controls = new THREE.OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.07;
+    controls.autoRotate = true;
+    controls.autoRotateSpeed = 1.2;
+    controls.minDistance = 0.1;
+    controls.maxDistance = 500;
+
+    // Dừng auto-rotate khi người dùng tương tác
+    renderer.domElement.addEventListener('pointerdown', () => {
+      controls.autoRotate = false;
+    });
+
+    /* ── Default material (dùng khi không có MTL) ── */
+    const defaultMat = new THREE.MeshPhongMaterial({
+      color: 0x00d4aa,
+      specular: 0x224433,
+      shininess: 35,
+      transparent: true,
+      opacity: 0.92,
+      side: THREE.DoubleSide
+    });
+
+    /* ── Hàm đặt object vào tâm scene và tự động zoom vừa màn hình ── */
+    function centerAndFit(object) {
+      const box = new THREE.Box3().setFromObject(object);
+      const center = box.getCenter(new THREE.Vector3());
+      const size = box.getSize(new THREE.Vector3());
+      const maxDim = Math.max(size.x, size.y, size.z);
+
+      // Đưa về tâm (0,0,0)
+      object.position.sub(center);
+
+      // Đặt camera vừa nhìn thấy toàn bộ mesh
+      const fov = camera.fov * (Math.PI / 180);
+      const fitDist = (maxDim / 2) / Math.tan(fov / 2) * 1.6;
+      camera.position.set(0, 0, fitDist);
+      controls.target.set(0, 0, 0);
+      camera.near = fitDist / 100;
+      camera.far = fitDist * 10;
+      camera.updateProjectionMatrix();
+      controls.update();
+    }
+
+    /* ── Load OBJ (+ thử MTL cùng thư mục) ── */
+    function loadWithMaterials(materials) {
+      const objLoader = new THREE.OBJLoader();
+      if (materials) {
+        materials.preload();
+        objLoader.setMaterials(materials);
+      }
+
+      objLoader.load(
+        objUrl,
+        (object) => {
+          // Nếu không có MTL, gán material mặc định màu teal
+          if (!materials) {
+            object.traverse(child => {
+              if (child.isMesh) child.material = defaultMat;
+            });
+          }
+
+          centerAndFit(object);
+          scene.add(object);
+
+          // Ẩn loading, hiện hint
+          loading.style.opacity = '0';
+          setTimeout(() => loading.remove(), 400);
+          hint.style.opacity = '1';
+          setTimeout(() => { hint.style.opacity = '0'; }, 4000);
+        },
+        (xhr) => {
+          // Tiến trình load
+          if (xhr.total > 0) {
+            const pct = Math.round((xhr.loaded / xhr.total) * 100);
+            const pctEl = loading.querySelector('div:nth-child(2)');
+            if (pctEl) pctEl.textContent = `Đang tải mesh 3D… ${pct}%`;
+          }
+        },
+        () => {
+          // OBJ load thất bại
+          loading.innerHTML = `
+            <div style="font-size:2rem">❌</div>
+            <div style="color:#ff4d6d">Không thể tải file OBJ</div>
+            <div style="color:#5a6280;font-size:0.75rem">${objUrl}</div>
+          `;
+        }
+      );
+    }
+
+    // Thử load MTL trước (cùng thư mục, cùng tên file)
+    const mtlUrl = objUrl.replace(/\.obj$/i, '.mtl');
+    const mtlLoader = new THREE.MTLLoader();
+    mtlLoader.load(
+      mtlUrl,
+      (materials) => loadWithMaterials(materials),  // Có MTL
+      null,
+      () => loadWithMaterials(null)                  // Không có MTL → dùng default
+    );
+
+    /* ── Animation loop ── */
+    let animId;
+    const animate = () => {
+      animId = requestAnimationFrame(animate);
+      controls.update();
+      renderer.render(scene, camera);
+    };
+    animate();
+
+    /* ── Responsive resize ── */
+    const onResize = () => {
+      if (!wrapper.isConnected) return;
+      const w = wrapper.clientWidth;
+      const h = wrapper.clientHeight;
+      camera.aspect = w / h;
+      camera.updateProjectionMatrix();
+      renderer.setSize(w, h);
+    };
+    window.addEventListener('resize', onResize);
+
+    /* ── FIX BUG 3: Cleanup khi đóng modal ── */
+    threeCleanup = () => {
+      cancelAnimationFrame(animId);
+      window.removeEventListener('resize', onResize);
+      controls.dispose();
+      // Giải phóng geometry & material
+      scene.traverse(obj => {
+        if (obj.isMesh) {
+          obj.geometry?.dispose();
+          if (Array.isArray(obj.material)) {
+            obj.material.forEach(m => m.dispose());
+          } else {
+            obj.material?.dispose();
+          }
+        }
+      });
+      renderer.dispose();
+    };
+  }
+
+  /* ─────────────────────────────────────────────────────────────
+   * MODAL STATE
+   * ───────────────────────────────────────────────────────────── */
   let currentFile = { filepath: '', type: '', url: '' };
 
   window.openModal = function(name, type, date, size, url, thumbUrl, filepath) {
@@ -44,34 +264,37 @@ document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('modal-meta').textContent = `${date} · ${size}`;
 
     const modalBody = document.querySelector('.modal-body');
-    const isMesh = name.toLowerCase().endsWith('.obj') || type === 'meshes';
+    const ext = name.toLowerCase().split('.').pop();
+    const isMesh = ['obj', 'stl', 'ply', 'glb', 'gltf'].includes(ext) || type === 'meshes';
 
-    // Xóa nội dung cũ
+    // Xóa nội dung cũ + cleanup Three.js nếu có
     modalBody.innerHTML = '';
+    if (threeCleanup) { threeCleanup(); threeCleanup = null; }
 
     if (isMesh && url && url !== '#') {
-      // Tạo model-viewer cho file .obj
-      const viewer = document.createElement('model-viewer');
-      viewer.setAttribute('src', url);
-      viewer.setAttribute('alt', name);
-      viewer.setAttribute('camera-controls', '');
-      viewer.setAttribute('auto-rotate', '');
-      viewer.setAttribute('rotation-per-second', '30deg');
-      viewer.setAttribute('environment-image', 'neutral');
-      viewer.setAttribute('exposure', '1.5');
-      viewer.setAttribute('shadow-intensity', '0.5');
-      viewer.setAttribute('style', 'width:100%; height:70vh; background:var(--bg3);');
-      viewer.setAttribute('exposure', '1');
-      viewer.setAttribute('shadow-intensity', '0');
-      viewer.id = 'modal-viewer';
-      modalBody.appendChild(viewer);
+      /* ── 3D Viewer: dùng Three.js (KHÔNG dùng model-viewer) ── */
+      initOBJViewer(modalBody, url, name);
 
-      // Ẩn nút zoom (không cần cho 3D)
+      // Ẩn nút zoom 2D (không cần cho 3D)
       document.querySelectorAll('.modal-controls .modal-btn').forEach(btn => {
-        if (btn.textContent !== '✕') btn.style.display = 'none';
+        if (btn.id !== 'modalCloseBtn') btn.style.display = 'none';
       });
+
+    } else if (isMesh && (!url || url === '#')) {
+      /* Mesh nhưng chưa có URL (trash) */
+      modalBody.innerHTML = `
+        <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;
+                    height:40vh;color:#5a6280;font-family:monospace;gap:12px;">
+          <div style="font-size:3rem;color:#00d4aa">◈</div>
+          <div>${name}</div>
+          <div style="font-size:0.75rem">File mesh không khả dụng để xem (đang trong thùng rác)</div>
+        </div>`;
+      document.querySelectorAll('.modal-controls .modal-btn').forEach(btn => {
+        if (btn.id !== 'modalCloseBtn') btn.style.display = 'none';
+      });
+
     } else {
-      // Hiển thị ảnh 2D như cũ
+      /* ── Ảnh 2D như cũ ── */
       const img = document.createElement('img');
       img.src = thumbUrl;
       img.alt = name;
@@ -81,21 +304,33 @@ document.addEventListener('DOMContentLoaded', function() {
       img.style.cursor = 'grab';
       modalBody.appendChild(img);
 
-      // Reset biến zoom (được định nghĩa trong common.js)
       if (typeof currentZoom !== 'undefined') currentZoom = 1;
       if (typeof translateX !== 'undefined') translateX = 0;
       if (typeof translateY !== 'undefined') translateY = 0;
 
       // Hiện lại nút zoom
       document.querySelectorAll('.modal-controls .modal-btn').forEach(btn => {
-        if (btn.textContent !== '✕') btn.style.display = 'flex';
+        if (btn.id !== 'modalCloseBtn') btn.style.display = 'flex';
       });
     }
 
     document.getElementById('modal').classList.add('show');
   };
 
-  /* ATTACH CARD EVENTS */
+  /* Hook đóng modal → cleanup Three.js */
+  const modalEl = document.getElementById('modal');
+  if (modalEl) {
+    const observer = new MutationObserver(() => {
+      if (!modalEl.classList.contains('show')) {
+        if (threeCleanup) { threeCleanup(); threeCleanup = null; }
+      }
+    });
+    observer.observe(modalEl, { attributes: true, attributeFilter: ['class'] });
+  }
+
+  /* ─────────────────────────────────────────────────────────────
+   * ATTACH CARD EVENTS
+   * ───────────────────────────────────────────────────────────── */
   function attachCardEvents(container) {
     container.querySelectorAll('.img-card').forEach(card => {
       const name = card.dataset.name;
@@ -131,7 +366,9 @@ document.addEventListener('DOMContentLoaded', function() {
 
   attachCardEvents(document);
 
-  /* FILE DELETION (move to trash) */
+  /* ─────────────────────────────────────────────────────────────
+   * FILE DELETION
+   * ───────────────────────────────────────────────────────────── */
   window.deleteFile = function(filepath, type) {
     if (!confirm(`Chuyển file vào thùng rác?`)) return;
     fetch(`/archive/delete/${type}/${encodeURIComponent(filepath)}`, { method: 'DELETE' })
@@ -147,7 +384,9 @@ document.addEventListener('DOMContentLoaded', function() {
       .catch(() => showToast('Lỗi kết nối', true));
   };
 
-  /* TRASH FUNCTIONS */
+  /* ─────────────────────────────────────────────────────────────
+   * TRASH FUNCTIONS
+   * ───────────────────────────────────────────────────────────── */
   async function loadTrashItems() {
     const grid = document.getElementById('trash-grid');
     grid.innerHTML = '<div style="color:var(--text3);padding:20px;">Đang tải...</div>';
@@ -171,7 +410,7 @@ document.addEventListener('DOMContentLoaded', function() {
     div.className = 'img-card';
     div.dataset.name = item.name;
     div.dataset.type = item.original_type;
-    div.dataset.subtype = item.subtype || '';  // <-- thêm subtype cho trash
+    div.dataset.subtype = item.subtype || '';
     div.dataset.date = item.date_str;
     div.dataset.size = item.size;
     div.dataset.url = '#';
@@ -179,15 +418,9 @@ document.addEventListener('DOMContentLoaded', function() {
     div.dataset.filepath = item.file_path;
     div.dataset.originalType = item.original_type;
 
-    let typeIcon = '📄';
-    let typeLabel = 'Raw';
-    if (item.original_type === 'processed') {
-      typeIcon = '⚙️';
-      typeLabel = 'Processed';
-    } else if (item.original_type === 'meshes') {
-      typeIcon = '◈';
-      typeLabel = 'Mesh';
-    }
+    let typeIcon = '📄', typeLabel = 'Raw';
+    if (item.original_type === 'processed') { typeIcon = '⚙️'; typeLabel = 'Processed'; }
+    else if (item.original_type === 'meshes') { typeIcon = '◈'; typeLabel = 'Mesh'; }
 
     div.innerHTML = `
       <div class="img-thumb">
@@ -205,15 +438,11 @@ document.addEventListener('DOMContentLoaded', function() {
     `;
 
     div.querySelector('.restore-btn').addEventListener('click', (e) => {
-      e.stopPropagation();
-      restoreFile(item.file_path);
+      e.stopPropagation(); restoreFile(item.file_path);
     });
-
     div.querySelector('.permanent-btn').addEventListener('click', (e) => {
-      e.stopPropagation();
-      permanentDelete(item.file_path);
+      e.stopPropagation(); permanentDelete(item.file_path);
     });
-
     return div;
   }
 
@@ -222,63 +451,57 @@ document.addEventListener('DOMContentLoaded', function() {
     try {
       const res = await fetch(window.TRASH_API.restore + encodeURIComponent(filepath), { method: 'POST' });
       const data = await res.json();
-      if (data.success) {
-        showToast('Đã khôi phục');
-        setTimeout(() => location.reload(), 500);
-      } else {
-        showToast(data.error, true);
-      }
-    } catch(e) {
-      showToast('Lỗi kết nối', true);
-    }
+      if (data.success) { showToast('Đã khôi phục'); setTimeout(() => location.reload(), 500); }
+      else showToast(data.error, true);
+    } catch(e) { showToast('Lỗi kết nối', true); }
   };
 
   window.permanentDelete = async function(filepath) {
-    if (!confirm(`Xóa vĩnh viễn file này? Hành động không thể hoàn tác!`)) return;
+    if (!confirm(`Xóa vĩnh viễn? Hành động không thể hoàn tác!`)) return;
     try {
       const res = await fetch(window.TRASH_API.permanent + encodeURIComponent(filepath), { method: 'DELETE' });
       const data = await res.json();
-      if (data.success) {
-        showToast('Đã xóa vĩnh viễn');
-        setTimeout(() => location.reload(), 500);
-      } else {
-        showToast(data.error, true);
-      }
-    } catch(e) {
-      showToast('Lỗi kết nối', true);
-    }
+      if (data.success) { showToast('Đã xóa vĩnh viễn'); setTimeout(() => location.reload(), 500); }
+      else showToast(data.error, true);
+    } catch(e) { showToast('Lỗi kết nối', true); }
   };
 
-  /* ADD NEW BUTTON -> GO TO TRAIN */
+  /* ─────────────────────────────────────────────────────────────
+   * NAVIGATE TO TRAIN
+   * ───────────────────────────────────────────────────────────── */
   document.getElementById('addNewBtn').addEventListener('click', () => {
     window.location.href = '/train';
   });
 
-  /* FILTER & SEARCH (combined) */
+  /* ─────────────────────────────────────────────────────────────
+   * FILTER & SEARCH
+   * ───────────────────────────────────────────────────────────── */
   const filterTypeSelect = document.getElementById('filterTypeSelect');
   const searchInput = document.getElementById('searchInput');
 
   function filterCards() {
     const activeTab = document.querySelector('.tab.active')?.dataset.tab;
-    const container = activeTab ? document.getElementById(`tab-${activeTab}`) : document.querySelector('.tab-content:not([style*="none"])');
+    const container = activeTab ? document.getElementById(`tab-${activeTab}`) : null;
     if (!container) return;
 
-    const searchKeyword = searchInput.value.toLowerCase();
+    const keyword = searchInput.value.toLowerCase();
     const filterType = filterTypeSelect.value;
 
     container.querySelectorAll('.img-card').forEach(card => {
       const name = card.querySelector('.img-name')?.textContent.toLowerCase() || '';
       const subtype = card.dataset.subtype || '';
-      const matchesSearch = name.includes(searchKeyword);
-      const matchesType = (filterType === 'all') || (subtype === filterType);
-      card.style.display = (matchesSearch && matchesType) ? '' : 'none';
+      const matchSearch = name.includes(keyword);
+      const matchType = (filterType === 'all') || (subtype === filterType);
+      card.style.display = (matchSearch && matchType) ? '' : 'none';
     });
   }
 
   filterTypeSelect.addEventListener('change', filterCards);
   searchInput.addEventListener('input', filterCards);
 
-  /* LAZY LOADING THUMBNAILS */
+  /* ─────────────────────────────────────────────────────────────
+   * LAZY LOADING THUMBNAILS
+   * ───────────────────────────────────────────────────────────── */
   const observer = new IntersectionObserver((entries) => {
     entries.forEach(entry => {
       if (entry.isIntersecting) {
@@ -287,9 +510,7 @@ document.addEventListener('DOMContentLoaded', function() {
         if (filePath && !img.src.includes('/static/thumbnails/')) {
           fetch(`/archive/api/thumbnail?file=${encodeURIComponent(filePath)}`)
             .then(res => res.json())
-            .then(data => {
-              if (data.thumb_url) img.src = data.thumb_url;
-            })
+            .then(data => { if (data.thumb_url) img.src = data.thumb_url; })
             .catch(() => {});
         }
         observer.unobserve(img);
@@ -302,11 +523,10 @@ document.addEventListener('DOMContentLoaded', function() {
   }
   observeThumbnails(document);
 
-  /* MODAL DELETE BUTTON */
-  document.getElementById('deleteModalBtn').addEventListener('click', () => {
-    if (currentFile.filepath) {
-      deleteFile(currentFile.filepath, currentFile.type);
-      closeModal();
-    }
+  /* ─────────────────────────────────────────────────────────────
+   * MODAL DELETE BUTTON
+   * ───────────────────────────────────────────────────────────── */
+  document.getElementById('deleteModalBtn')?.addEventListener('click', () => {
+    if (currentFile.filepath) { deleteFile(currentFile.filepath, currentFile.type); closeModal(); }
   });
 });
