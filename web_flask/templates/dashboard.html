@@ -1,10 +1,103 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <title>Title</title>
-</head>
-<body>
+{% extends "base.html" %}
 
-</body>
-</html>
+{% block title %}Dashboard - Y_Khoa_AI{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/dashboard.css') }}">
+{% endblock %}
+
+{% block content %}
+<div class="page active">
+  <div class="page-title">Dashboard Overview</div>
+  <div class="page-subtitle">Hệ thống mô phỏng <strong>phẫu thuật khối u gan</strong></div>
+
+  <div class="date-range-container">
+    <div class="date-input-group">
+      <label>Từ ngày</label>
+      <input type="date" id="startDate" class="date-input" value="{{ start_date }}">
+    </div>
+    <div class="date-input-group">
+      <label>Đến ngày</label>
+      <input type="date" id="endDate" class="date-input" value="{{ end_date }}">
+    </div>
+    <button class="filter-btn" id="applyDateBtn">Áp dụng</button>
+    <button class="filter-btn" id="resetDateBtn">Đặt lại</button>
+  </div>
+
+  <div class="stats-grid">
+    <div class="stat-card">
+      <div class="stat-icon icon-raw">🖼</div>
+      <div class="stat-label">Raw Images</div>
+      <div class="stat-value" id="stat-raw">{{ stats.raw }}</div>
+      <div class="stat-sub">Ảnh CT thô chưa xử lý</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-icon icon-proc">⚙</div>
+      <div class="stat-label">Processed</div>
+      <div class="stat-value" id="stat-proc">{{ stats.processed }}</div>
+      <div class="stat-sub">Ảnh đã được huấn luyện</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-icon icon-mesh">◈</div>
+      <div class="stat-label">3D Meshes</div>
+      <div class="stat-value" id="stat-mesh">{{ stats.mesh }}</div>
+      <div class="stat-sub">Mô hình 3D mesh đã tạo</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-icon icon-total">◎</div>
+      <div class="stat-label">Accuracy</div>
+      <div class="stat-value" id="stat-acc">{{ "%.1f"|format(stats.accuracy) }}<span style="font-size:1rem;color:var(--text2)">%</span></div>
+      <div class="stat-sub">Độ chính xác segmentation</div>
+    </div>
+  </div>
+
+  <div class="charts-row">
+    <div class="chart-card">
+      <div class="chart-header">
+        <div><div class="chart-title">Tăng trưởng dữ liệu theo thời gian</div></div>
+        <div style="display:flex;align-items:center;gap:8px">
+          <div class="live-dot"></div>
+          <div class="chart-badge">Real-time</div>
+        </div>
+      </div>
+      <div class="chart-legend">
+        <div class="legend-item"><div class="legend-dot" style="background:#4d9fff"></div>Raw</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#00d4aa"></div>Processed</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#ffb347"></div>3D Mesh</div>
+      </div>
+      <div style="position:relative;height:240px">
+        <canvas id="mainChart"></canvas>
+      </div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-header">
+        <div class="chart-title">Phân bổ hiện tại</div>
+      </div>
+      <div style="position:relative;height:200px">
+        <canvas id="pieChart"></canvas>
+      </div>
+      <div class="chart-legend" style="margin-top:1rem;flex-direction:column;gap:8px" id="pie-legend-container"></div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+  window.DASHBOARD_INIT = {
+    labels: {{ chart_data.labels | tojson }},
+    raw: {{ chart_data.raw | tojson }},
+    processed: {{ chart_data.processed | tojson }},
+    mesh: {{ chart_data.mesh | tojson }},
+    stats: {
+      raw: {{ stats.raw }},
+      processed: {{ stats.processed }},
+      mesh: {{ stats.mesh }},
+      accuracy: {{ stats.accuracy }}
+    },
+    defaultStart: "{{ start_date }}",
+    defaultEnd: "{{ end_date }}"
+  };
+</script>
+<script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
+{% endblock %}

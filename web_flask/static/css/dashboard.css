@@ -1,0 +1,38 @@
+/* STAT CARDS */
+.stats-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:2rem}
+.stat-card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius-lg);padding:1.25rem 1.5rem;position:relative;overflow:hidden;transition:border-color 0.2s}
+.stat-card::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,var(--teal),transparent)}
+.stat-card:hover{border-color:var(--border2)}
+.stat-label{font-family:var(--font-mono);font-size:0.7rem;font-weight:500;color:var(--text3);text-transform:uppercase;letter-spacing:0.1em;margin-bottom:0.75rem}
+.stat-value{font-family:var(--font-mono);font-size:2.2rem;font-weight:600;color:var(--text);line-height:1;margin-bottom:0.4rem}
+.stat-sub{font-size:0.78rem;color:var(--text3)}
+.stat-delta{display:inline-flex;align-items:center;gap:3px;font-family:var(--font-mono);font-size:0.72rem;padding:2px 8px;border-radius:20px;margin-top:6px}
+.delta-up{background:rgba(0,212,170,0.12);color:var(--teal)}
+.delta-down{background:rgba(255,77,109,0.12);color:var(--danger)}
+.stat-icon{position:absolute;right:1.25rem;top:1.25rem;width:36px;height:36px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:16px}
+.icon-raw{background:rgba(77,159,255,0.12);color:var(--info)}
+.icon-proc{background:rgba(0,212,170,0.12);color:var(--teal)}
+.icon-mesh{background:rgba(255,179,71,0.12);color:var(--warning)}
+.icon-total{background:rgba(255,77,109,0.12);color:var(--danger)}
+
+/* CHARTS */
+.charts-row{display:grid;grid-template-columns:2fr 1fr;gap:16px;margin-bottom:2rem}
+.chart-card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius-lg);padding:1.5rem}
+.chart-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:1.5rem}
+.chart-title{font-family:var(--font-mono);font-size:0.8rem;font-weight:500;color:var(--text);text-transform:uppercase;letter-spacing:0.06em}
+.chart-badge{font-family:var(--font-mono);font-size:0.68rem;color:var(--teal);background:var(--teal-dim);border:1px solid var(--teal3);padding:3px 8px;border-radius:20px}
+.chart-legend{display:flex;gap:16px;margin-bottom:1rem}
+.legend-item{display:flex;align-items:center;gap:6px;font-size:0.75rem;color:var(--text2)}
+.legend-dot{width:8px;height:8px;border-radius:50%}
+
+/* DATE RANGE CONTROLS */
+.date-range-container{display:flex;gap:16px;align-items:flex-end;margin-bottom:24px;flex-wrap:wrap}
+.date-input-group{display:flex;flex-direction:column;gap:4px}
+.date-input-group label{font-family:var(--font-mono);font-size:0.7rem;color:var(--text3);text-transform:uppercase}
+.date-input{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:8px 12px;color:var(--text);font-family:var(--font-mono);font-size:0.85rem}
+
+/* DATE RANGE BUTTONS */
+#applyDateBtn{background:var(--teal-dim);color:var(--teal);border:1px solid var(--teal3);font-weight:500;transition:all 0.15s;padding:8px 20px;font-family:var(--font-mono);font-size:0.78rem;cursor:pointer;border-radius:var(--radius)}
+#applyDateBtn:hover{background:var(--teal);color:#000;border-color:var(--teal)}
+#resetDateBtn{background:transparent;color:var(--text2);border:1px solid var(--border);transition:all 0.15s;padding:8px 20px;font-family:var(--font-mono);font-size:0.78rem;cursor:pointer;border-radius:var(--radius)}
+#resetDateBtn:hover{background:var(--bg3);border-color:var(--border2);color:var(--text)}

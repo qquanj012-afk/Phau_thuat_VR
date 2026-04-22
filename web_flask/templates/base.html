@@ -1,10 +1,99 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="vi">
 <head>
-    <meta charset="UTF-8">
-    <title>Title</title>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}Y_Khoa_AI{% endblock %}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/.css') }}">
+  {% block extra_css %}{% endblock %}
 </head>
 <body>
+  <header>
+    <div class="logo">
+      <div class="logo-icon">
+        <svg viewBox="0 0 14 14"><path d="M7 1L13 4.5V9.5L7 13L1 9.5V4.5Z" stroke-width="1.5" stroke="currentColor" fill="none"/><circle cx="7" cy="7" r="2" fill="currentColor"/></svg>
+      </div>
+      Y_Khoa_AI
+    </div>
+    <nav>
+      <a href="{{ url_for('dashboard.dashboard_page') }}" {% if request.endpoint == 'dashboard.dashboard_page' %}class="active"{% endif %}>Home</a>
+      <a href="{{ url_for('train.train_page') }}" {% if request.endpoint == 'train.train_page' %}class="active"{% endif %}>Train</a>
+      <a href="{{ url_for('archive.archive_page') }}" {% if request.endpoint == 'archive.archive_page' %}class="active"{% endif %}>Archive</a>
+    </nav>
+    <div class="header-badge">
+      <span class="live-dot" style="display:inline-block;vertical-align:middle;margin-right:5px"></span>LIVE
+    </div>
+  </header>
 
+  <main>
+    {% block content %}{% endblock %}
+  </main>
+
+  <footer>
+    <div>
+      <div class="footer-brand">
+        <strong>Y_Khoa_AI</strong>
+        <span>Lưu trữ database về khối u trong gan</span>
+      </div>
+      <div class="footer-socials">
+        <a href="#">IG</a>
+        <a href="#">in</a>
+        <a href="#">𝕏</a>
+      </div>
+    </div>
+    <div class="footer-links">
+      <div class="footer-col">
+        <h6>Features</h6>
+        <a href="#">Core features</a>
+        <a href="#">Pro experience</a>
+        <a href="#">Integrations</a>
+      </div>
+      <div class="footer-col">
+        <h6>Learn more</h6>
+        <a href="#">Blog</a>
+        <a href="#">Case studies</a>
+        <a href="#">Customer stories</a>
+        <a href="#">Best practices</a>
+      </div>
+      <div class="footer-col">
+        <h6>Support</h6>
+        <a href="#">Contact</a>
+        <a href="#">Support</a>
+        <a href="#">Legal</a>
+      </div>
+    </div>
+  </footer>
+
+  <div class="modal-overlay" id="modal">
+    <div class="modal">
+      <div class="modal-header">
+        <span class="modal-title" id="modal-title">Ảnh</span>
+        <div class="modal-controls">
+          <button class="modal-btn" onclick="zoomIn()">+</button>
+          <button class="modal-btn" onclick="zoomOut()">−</button>
+          <button class="modal-btn" onclick="resetZoom()">↺</button>
+          <button class="modal-btn modal-close" onclick="closeModal()">✕</button>
+        </div>
+      </div>
+      <div class="modal-body">
+        <img class="modal-img" id="modal-img" src="" alt="preview">
+      </div>
+      <div class="modal-footer">
+        <span id="modal-meta"></span>
+        <div style="display:flex;gap:8px">
+          <button id="deleteModalBtn" style="display:none;padding:6px 14px;background:rgba(255,77,109,0.12);border:1px solid rgba(255,77,109,0.3);border-radius:var(--radius);color:var(--danger);font-family:var(--font-mono);font-size:0.75rem;cursor:pointer">Xóa</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+  <button id="scrollToTop" title="Lên đầu trang">↑</button>
+
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <script src="{{ url_for('static', filename='js/base.js') }}"></script>
+  {% block extra_js %}{% endblock %}
 </body>
 </html>
