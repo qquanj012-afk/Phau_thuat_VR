@@ -126,7 +126,7 @@ document.addEventListener('DOMContentLoaded', function() {
       controls.autoRotate = false;
     });
 
-    /* ── Default material (dùng khi không có MTL) ── */
+   /* ── Default material (dùng khi không có MTL) ── */
     const defaultMat = new THREE.MeshPhongMaterial({
       color: 0x00d4aa,
       specular: 0x224433,
@@ -208,7 +208,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const mtlLoader = new THREE.MTLLoader();
     mtlLoader.load(
       mtlUrl,
-      (materials) => loadWithMaterials(materials),  // Có MTL
+      (materials) => loadWithMaterials(null),  // Có MTL
       null,
       () => loadWithMaterials(null)                  // Không có MTL → dùng default
     );

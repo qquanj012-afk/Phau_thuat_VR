@@ -46,14 +46,26 @@ def generate_thumbnail(file_path, size=(300, 300)):
 
     # ----- Xử lý file .obj (mesh) -----
     if lower.endswith('.obj'):
-        img = Image.new('RGB', size, color=(20, 25, 35))
+        # Tạo ảnh nền tối với hiệu ứng gradient đơn giản
+        img = Image.new('RGB', size, color=(25, 30, 40))
         draw = ImageDraw.Draw(img)
-        text = "3D MESH"
-        bbox = draw.textbbox((0, 0), text)
-        text_width = bbox[2] - bbox[0]
-        text_height = bbox[3] - bbox[1]
-        draw.text(((size[0] - text_width) // 2, (size[1] - text_height) // 2),
-                  text, fill=(0, 212, 170))
+
+        # Vẽ một hình lập phương cách điệu (đại diện cho 3D)
+        cx, cy = size[0] // 2, size[1] // 2
+        # Mặt trước
+        draw.rectangle([cx - 25, cy - 20, cx + 5, cy + 10], fill=(0, 180, 160), outline=(0, 220, 200), width=2)
+        # Mặt trên (giả 3D)
+        draw.polygon([(cx - 25, cy - 20), (cx - 10, cy - 35), (cx + 20, cy - 35), (cx + 5, cy - 20)],
+                     fill=(0, 210, 180), outline=(0, 240, 210), width=2)
+        # Mặt bên phải
+        draw.polygon([(cx + 5, cy - 20), (cx + 20, cy - 35), (cx + 20, cy - 5), (cx + 5, cy + 10)],
+                     fill=(0, 150, 130), outline=(0, 190, 170), width=2)
+
+        # Thêm tên file (rút gọn)
+        short_name = os.path.basename(file_path)[:15] + ('…' if len(os.path.basename(file_path)) > 15 else '')
+        draw.text((cx, cy + 45), short_name, fill=(200, 210, 220), anchor="mm")
+        draw.text((cx, cy + 60), "[3D Mesh]", fill=(100, 150, 160), anchor="mm")
+
         img.save(cache_path)
         return cache_url
 
