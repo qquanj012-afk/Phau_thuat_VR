@@ -48,7 +48,7 @@
   <div class="charts-row">
     <div class="chart-card">
       <div class="chart-header">
-        <div><div class="chart-title">Tăng trưởng dữ liệu theo thời gian</div></div>
+        <div><div class="chart-title">Tổng dữ liệu theo thời gian</div></div>
         <div style="display:flex;align-items:center;gap:8px">
           <div class="live-dot"></div>
           <div class="chart-badge">Real-time</div>
@@ -86,8 +86,7 @@
     stats: {
       raw: {{ stats.raw }},
       processed: {{ stats.processed }},
-      mesh: {{ stats.mesh }},
-      accuracy: {{ stats.accuracy }}
+      mesh: {{ stats.mesh }}
     },
     defaultStart: "{{ start_date }}",
     defaultEnd: "{{ end_date }}"

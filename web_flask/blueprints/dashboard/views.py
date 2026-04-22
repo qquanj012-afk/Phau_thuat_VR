@@ -107,16 +107,28 @@ def api_timeseries():
         all_days.append(current.strftime('%Y-%m-%d'))
         current += timedelta(days=1)
 
-    raw_series = [raw_counts.get(day, 0) for day in all_days]
-    proc_series = [proc_counts.get(day, 0) for day in all_days]
-    mesh_series = [mesh_counts.get(day, 0) for day in all_days]
+    # Chuyển từ daily count sang cumulative (tích lũy)
+    raw_cumulative = []
+    proc_cumulative = []
+    mesh_cumulative = []
+    raw_total = 0
+    proc_total = 0
+    mesh_total = 0
+
+    for day in all_days:
+        raw_total += raw_counts.get(day, 0)
+        proc_total += proc_counts.get(day, 0)
+        mesh_total += mesh_counts.get(day, 0)
+        raw_cumulative.append(raw_total)
+        proc_cumulative.append(proc_total)
+        mesh_cumulative.append(mesh_total)
 
     return jsonify({
         'labels': all_days,
-        'raw': raw_series,
-        'processed': proc_series,
-        'mesh': mesh_series,
-        'total_raw': sum(raw_series),
-        'total_processed': sum(proc_series),
-        'total_mesh': sum(mesh_series)
+        'raw': raw_cumulative,
+        'processed': proc_cumulative,
+        'mesh': mesh_cumulative,
+        'total_raw': raw_total,
+        'total_processed': proc_total,
+        'total_mesh': mesh_total
     })

@@ -27,8 +27,7 @@ def generate_thumbnail(file_path, size=(300, 300)):
     Tạo ảnh PNG thumbnail từ file ảnh y tế (NIfTI, DICOM) hoặc ảnh thường.
     Trả về đường dẫn tương đối tới file PNG đã cache (dùng cho web).
     """
-    file_path = str(file_path)  # đảm bảo là string
-    # Tạo tên cache dựa trên hash của đường dẫn và thời gian sửa đổi
+    file_path = str(file_path)
     stat = os.stat(file_path)
     hash_input = f"{file_path}_{stat.st_mtime}_{stat.st_size}"
     cache_key = hashlib.md5(hash_input.encode()).hexdigest()
@@ -44,19 +43,31 @@ def generate_thumbnail(file_path, size=(300, 300)):
     img_array = None
     lower = file_path.lower()
 
+    # ----- Xử lý file .obj (mesh) -----
+    if lower.endswith('.obj'):
+        img = Image.new('RGB', size, color=(20, 25, 35))
+        draw = ImageDraw.Draw(img)
+        text = "3D MESH"
+        # Dùng font mặc định
+        bbox = draw.textbbox((0, 0), text)
+        text_width = bbox[2] - bbox[0]
+        text_height = bbox[3] - bbox[1]
+        draw.text(((size[0] - text_width) // 2, (size[1] - text_height) // 2),
+                  text, fill=(0, 212, 170))
+        img.save(cache_path)
+        return cache_url
+
     # NIfTI
     if NIB_AVAILABLE and (lower.endswith('.nii') or lower.endswith('.nii.gz')):
         try:
             img = nib.load(file_path)
             data = img.get_fdata()
-            # Lấy lát cắt giữa theo trục axial (trục 2) nếu là 3D
             if data.ndim == 3:
                 slice_idx = data.shape[2] // 2
                 img_array = data[:, :, slice_idx]
             elif data.ndim == 2:
                 img_array = data
             else:
-                # 4D: chọn volume đầu tiên
                 img_array = data[:, :, data.shape[2]//2, 0] if data.ndim == 4 else None
         except Exception as e:
             print(f"Lỗi đọc NIfTI {file_path}: {e}")
@@ -72,7 +83,7 @@ def generate_thumbnail(file_path, size=(300, 300)):
     # Ảnh thông thường (PNG, JPG...)
     elif lower.endswith(('.png', '.jpg', '.jpeg')):
         try:
-            pil_img = Image.open(file_path).convert('L')  # grayscale
+            pil_img = Image.open(file_path).convert('L')
             img_array = np.array(pil_img)
         except Exception as e:
             print(f"Lỗi đọc ảnh thường {file_path}: {e}")
@@ -82,7 +93,6 @@ def generate_thumbnail(file_path, size=(300, 300)):
         img = Image.new('RGB', size, color=(30, 30, 40))
         draw = ImageDraw.Draw(img)
         text = os.path.basename(file_path)[:20]
-        # Dùng font mặc định
         draw.text((10, size[1]//2), text, fill=(100, 150, 200))
         img.save(cache_path)
         return cache_url
@@ -96,7 +106,7 @@ def generate_thumbnail(file_path, size=(300, 300)):
     img_array = (img_array * 255).astype(np.uint8)
 
     # Tạo ảnh PIL, resize về kích thước thumbnail
-    img = Image.fromarray(img_array).convert('L')  # grayscale
+    img = Image.fromarray(img_array).convert('L')
     img = img.resize(size, Image.Resampling.LANCZOS)
     img.save(cache_path)
 

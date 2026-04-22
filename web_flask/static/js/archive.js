@@ -57,6 +57,9 @@ document.addEventListener('DOMContentLoaded', function() {
       viewer.setAttribute('camera-controls', '');
       viewer.setAttribute('auto-rotate', '');
       viewer.setAttribute('rotation-per-second', '30deg');
+      viewer.setAttribute('environment-image', 'neutral');
+      viewer.setAttribute('exposure', '1.5');
+      viewer.setAttribute('shadow-intensity', '0.5');
       viewer.setAttribute('style', 'width:100%; height:70vh; background:var(--bg3);');
       viewer.setAttribute('exposure', '1');
       viewer.setAttribute('shadow-intensity', '0');

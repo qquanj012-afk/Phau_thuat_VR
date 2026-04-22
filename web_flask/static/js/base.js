@@ -9,23 +9,28 @@ function showToast(msg, isError = false) {
   toastTimer = setTimeout(() => toast.classList.remove('show'), 3000);
 }
 
-/* MODAL VIEWER WITH DRAG */
+/* MODAL VIEWER WITH DRAG & ZOOM */
 let currentZoom = 1;
 let isDragging = false;
-let startX, startY, translateX = 0, translateY = 0;
+let startX = 0, startY = 0, translateX = 0, translateY = 0;
+let modalImg = null;
 
 function openModal(imageSrc, title = 'Ảnh') {
   const modal = document.getElementById('modal');
-  const modalImg = document.getElementById('modal-img');
+  modalImg = document.getElementById('modal-img');
   const modalTitle = document.getElementById('modal-title');
   if (!modal || !modalImg) return;
+
   modalTitle.textContent = title;
   modalImg.src = imageSrc;
-  modalImg.style.transform = 'scale(1)';
-  modalImg.style.cursor = 'grab';
+
+  // Reset transform
   currentZoom = 1;
   translateX = 0;
   translateY = 0;
+  modalImg.style.transform = `scale(${currentZoom})`;
+  modalImg.style.cursor = 'grab';
+
   modal.classList.add('show');
 }
 
@@ -35,8 +40,12 @@ function closeModal() {
 }
 
 function applyTransform() {
-  const img = document.getElementById('modal-img');
-  if (img) img.style.transform = `translate(${translateX}px, ${translateY}px) scale(${currentZoom})`;
+  if (!modalImg) {
+    modalImg = document.getElementById('modal-img');
+  }
+  if (modalImg) {
+    modalImg.style.transform = `translate(${translateX}px, ${translateY}px) scale(${currentZoom})`;
+  }
 }
 
 function zoomIn() {
@@ -61,6 +70,9 @@ function initImageDrag() {
   if (!img) return;
 
   img.addEventListener('mousedown', (e) => {
+    // Chỉ kích hoạt kéo khi là ảnh 2D (không phải model-viewer)
+    if (img.tagName !== 'IMG') return;
+
     isDragging = true;
     startX = e.clientX - translateX;
     startY = e.clientY - translateY;
@@ -70,14 +82,20 @@ function initImageDrag() {
 
   window.addEventListener('mousemove', (e) => {
     if (!isDragging) return;
+    const img = document.getElementById('modal-img');
+    if (!img || img.tagName !== 'IMG') return;
+
     translateX = e.clientX - startX;
     translateY = e.clientY - startY;
-    applyTransform();
+    img.style.transform = `translate(${translateX}px, ${translateY}px) scale(${currentZoom})`;
   });
 
   window.addEventListener('mouseup', () => {
-    isDragging = false;
-    if (img) img.style.cursor = 'grab';
+    if (isDragging) {
+      isDragging = false;
+      const img = document.getElementById('modal-img');
+      if (img) img.style.cursor = 'grab';
+    }
   });
 }
 

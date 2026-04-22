@@ -20,11 +20,19 @@ document.addEventListener('DOMContentLoaded', function() {
       scales: {
         x: { grid: { color: 'rgba(42,48,69,0.5)' }, ticks: { color: '#5a6280', font: { family: 'IBM Plex Mono', size: 11 } } },
         y: {
+          beginAtZero: true,
           grace: '5%',
           ticks: {
-            stepSize: 1,
-            callback: function(value) { if (Number.isInteger(value)) return value; },
-            color: '#5a6280', font: { family: 'IBM Plex Mono', size: 11 }
+            // Tự động giới hạn số lượng ticks (tối đa 8)
+            maxTicksLimit: 8,
+            // Định dạng số lớn thành 1k, 1M...
+            callback: function(value) {
+              if (value >= 1000000) return (value / 1000000).toFixed(1) + 'M';
+              if (value >= 1000) return (value / 1000).toFixed(1) + 'k';
+              return value;
+            },
+            color: '#5a6280',
+            font: { family: 'IBM Plex Mono', size: 11 }
           },
           grid: { color: 'rgba(42,48,69,0.5)' }
         }
@@ -63,7 +71,6 @@ document.addEventListener('DOMContentLoaded', function() {
       <div class="legend-item"><div class="legend-dot" style="background:#ffb347"></div>Meshes ${mesh} (${total ? (mesh/total*100).toFixed(1) : 0}%)</div>
     `;
   }
-  updateStatsAndLegend(init.stats.raw, init.stats.processed, init.stats.mesh);
 
   function fetchDataAndUpdate(start, end) {
     fetch(`/api/stats/timeseries?start=${start}&end=${end}`)
@@ -114,4 +121,7 @@ document.addEventListener('DOMContentLoaded', function() {
     endInput.value = end;
     fetchDataAndUpdate(startStr, end);
   });
+
+  // 🔄 Tự động tải dữ liệu thực khi trang load
+  fetchDataAndUpdate(init.defaultStart, init.defaultEnd);
 });
