@@ -1,0 +1,46 @@
+# Phau_thuat_VR/config.yaml
+# Cấu hình toàn cục cho cả train_model và web_flask
+
+# 1. Đường dẫn dữ liệu (tương đối từ thư mục gốc dự án)
+paths:
+  data_root: "data"                # Thư mục gốc chứa toàn bộ dữ liệu
+  raw_data: "data/raw"             # Ảnh CT thô (NIfTI, DICOM)
+  processed_data: "data/processed" # Ảnh đã tiền xử lý (.npy hoặc .nii)
+  meshes: "data/meshes"            # File mesh 3D (.obj, .stl)
+  checkpoints: "data/checkpoints"  # Model checkpoint (.pth)
+  temp: "data/temp"                # Thư mục tạm cho upload và xử lý
+  logs: "train_model/logs"         # Log huấn luyện (CSV, TensorBoard)
+
+# 2. Cấu hình tiền xử lý ảnh (dùng chung cho gan và u)
+preprocessing:
+  target_size: [256, 256]          # Kích thước ảnh sau resize
+  liver_window:
+    center: 40                     # Window center cho ảnh CT gan (HU)
+    width: 150                     # Window width cho ảnh CT gan (HU)
+  tumor_window:
+    center: 40                     # Có thể điều chỉnh riêng cho u
+    width: 150
+  normalize: true                  # Chuẩn hóa về [0,1]
+  add_coordinate_channels: true    # Thêm kênh tọa độ X, Y
+
+# 3. Huấn luyện model
+training:
+  batch_size: 4
+  learning_rate: 0.0001
+  epochs: 50
+  val_split: 0.2
+  num_workers: 4                   # Số worker cho DataLoader
+  save_best_only: true
+  early_stopping_patience: 10
+
+# 4. Inference
+inference:
+  threshold: 0.5                   # Ngưỡng nhị phân hóa mask
+
+# 5. Web Flask
+web:
+  host: "127.0.0.1"
+  port: 5000
+  debug: true
+  secret_key: "your-secret-key-change-in-production"
+  max_content_length: 536870912    # 512 MB (giới hạn upload)
