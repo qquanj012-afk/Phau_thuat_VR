@@ -32,24 +32,38 @@ def count_files(path, extensions):
     return total
 
 def get_raw_count():
-    return count_files(DATA_DIR / 'raw' / 'liver', MEDICAL_EXTS)
+    return count_files(DATA_DIR / 'raw' / 'liver', MEDICAL_EXTS) + \
+           count_files(DATA_DIR / 'raw' / 'tumor', MEDICAL_EXTS)
 
 def get_processed_count():
-    return count_files(DATA_DIR / 'processed' / 'liver', MEDICAL_EXTS)
+    return count_files(DATA_DIR / 'processed' / 'liver', MEDICAL_EXTS) + \
+           count_files(DATA_DIR / 'processed' / 'tumor', MEDICAL_EXTS)
 
 def get_mesh_count():
-    return count_files(DATA_DIR / 'meshes', MESH_EXTS)
+    return count_files(DATA_DIR / 'meshes' / 'liver', MESH_EXTS) + \
+           count_files(DATA_DIR / 'meshes' / 'tumor', MESH_EXTS)
 
 def get_trash_count():
     return count_files(TRASH_DIR, MEDICAL_EXTS | MESH_EXTS)
 
-def scan_directory(subdir, extensions, type_name, sort_by='date_desc', is_trash=False):
+def scan_directory(subdir, extensions, type_name, sort_by='date_desc', is_trash=False, raw_subfolder=None):
     items = []
-    root_path = (TRASH_DIR if is_trash else DATA_DIR) / subdir
+    base = TRASH_DIR if is_trash else DATA_DIR
+    root_path = base / subdir
+    if raw_subfolder and type_name == 'raw':
+        root_path = root_path / raw_subfolder
     if not root_path.exists():
         return items
 
     for root, _, files in os.walk(root_path):
+        root_str = str(root).lower()
+        if 'liver' in root_str:
+            subtype = 'liver'
+        elif 'tumor' in root_str:
+            subtype = 'tumor'
+        else:
+            subtype = 'unknown'
+
         for f in files:
             if any(f.lower().endswith(ext) for ext in extensions):
                 full = Path(root) / f
@@ -69,9 +83,11 @@ def scan_directory(subdir, extensions, type_name, sort_by='date_desc', is_trash=
                     'file_path': rel,
                     'thumb': url_for('static', filename='placeholder.png'),
                     'type': type_name,
+                    'subtype': subtype,
                     'original_type': subdir
                 })
 
+    # Sắp xếp
     if sort_by == 'name_asc':
         items.sort(key=lambda x: x['name'].lower())
     elif sort_by == 'name_desc':
@@ -81,16 +97,25 @@ def scan_directory(subdir, extensions, type_name, sort_by='date_desc', is_trash=
     else:
         items.sort(key=lambda x: x['date'], reverse=True)
     return items
-
 @archive_bp.route('/')
 def archive_page():
     sort = request.args.get('sort', 'date_desc')
-    raw_items = scan_directory('raw/liver', MEDICAL_EXTS, 'raw', sort)
-    processed_items = scan_directory('processed/liver', MEDICAL_EXTS, 'processed', sort)
+
+    raw_liver_items = scan_directory('raw/liver', MEDICAL_EXTS, 'raw', sort, raw_subfolder='imagesTr')
+    for item in raw_liver_items:
+        item['subtype'] = 'liver'
+
+    raw_tumor_items = scan_directory('raw/liver', MEDICAL_EXTS, 'raw', sort, raw_subfolder='labelsTr')
+    for item in raw_tumor_items:
+        item['subtype'] = 'tumor'
+
+    raw_items = raw_liver_items + raw_tumor_items
+
+    processed_items = scan_directory('processed', MEDICAL_EXTS, 'processed', sort)
     mesh_items = scan_directory('meshes', MESH_EXTS, 'mesh', sort)
 
     return render_template('archive.html',
-                           raw_count=get_raw_count(),
+                           raw_count=len(raw_items),
                            processed_count=get_processed_count(),
                            mesh_count=get_mesh_count(),
                            trash_count=get_trash_count(),
@@ -98,7 +123,6 @@ def archive_page():
                            processed_items=processed_items,
                            mesh_items=mesh_items,
                            current_sort=sort)
-
 @archive_bp.route('/api/thumbnail')
 def api_thumbnail():
     file_path = request.args.get('file')
@@ -139,7 +163,6 @@ def delete_file(type, filepath):
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
 
-# Thêm vào archive/views.py
 @archive_bp.route('/trash/items')
 def trash_items():
     sort = request.args.get('sort', 'date_desc')

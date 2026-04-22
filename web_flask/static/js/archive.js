@@ -17,6 +17,9 @@ document.addEventListener('DOMContentLoaded', function() {
 
     if (tabId === 'trash') {
       loadTrashItems();
+    } else {
+      // Khi chuyển tab, áp dụng lại bộ lọc hiện tại
+      filterCards();
     }
   };
 
@@ -35,59 +38,58 @@ document.addEventListener('DOMContentLoaded', function() {
   /* MODAL STATE */
   let currentFile = { filepath: '', type: '', url: '' };
 
-window.openModal = function(name, type, date, size, url, thumbUrl, filepath) {
-  currentFile = { filepath, type, url };
-  document.getElementById('modal-title').textContent = name;
-  document.getElementById('modal-meta').textContent = `${date} · ${size}`;
+  window.openModal = function(name, type, date, size, url, thumbUrl, filepath) {
+    currentFile = { filepath, type, url };
+    document.getElementById('modal-title').textContent = name;
+    document.getElementById('modal-meta').textContent = `${date} · ${size}`;
 
-  const modalBody = document.querySelector('.modal-body');
-  const modalImg = document.getElementById('modal-img');
-  const isMesh = name.toLowerCase().endsWith('.obj') || type === 'meshes';
+    const modalBody = document.querySelector('.modal-body');
+    const isMesh = name.toLowerCase().endsWith('.obj') || type === 'meshes';
 
-  // Xóa nội dung cũ
-  modalBody.innerHTML = '';
+    // Xóa nội dung cũ
+    modalBody.innerHTML = '';
 
-  if (isMesh && url && url !== '#') {
-    // Tạo model-viewer cho file .obj
-    const viewer = document.createElement('model-viewer');
-    viewer.setAttribute('src', url);
-    viewer.setAttribute('alt', name);
-    viewer.setAttribute('camera-controls', '');
-    viewer.setAttribute('auto-rotate', '');
-    viewer.setAttribute('rotation-per-second', '30deg');
-    viewer.setAttribute('style', 'width:100%; height:70vh; background:var(--bg3);');
-    viewer.setAttribute('exposure', '1');
-    viewer.setAttribute('shadow-intensity', '0');
-    viewer.id = 'modal-viewer';
-    modalBody.appendChild(viewer);
+    if (isMesh && url && url !== '#') {
+      // Tạo model-viewer cho file .obj
+      const viewer = document.createElement('model-viewer');
+      viewer.setAttribute('src', url);
+      viewer.setAttribute('alt', name);
+      viewer.setAttribute('camera-controls', '');
+      viewer.setAttribute('auto-rotate', '');
+      viewer.setAttribute('rotation-per-second', '30deg');
+      viewer.setAttribute('style', 'width:100%; height:70vh; background:var(--bg3);');
+      viewer.setAttribute('exposure', '1');
+      viewer.setAttribute('shadow-intensity', '0');
+      viewer.id = 'modal-viewer';
+      modalBody.appendChild(viewer);
 
-    // Ẩn nút zoom (không cần cho 3D)
-    document.querySelectorAll('.modal-controls .modal-btn').forEach(btn => {
-      if (btn.textContent !== '✕') btn.style.display = 'none';
-    });
-  } else {
-    // Hiển thị ảnh 2D như cũ
-    const img = document.createElement('img');
-    img.src = thumbUrl;
-    img.alt = name;
-    img.className = 'modal-img';
-    img.id = 'modal-img';
-    img.style.transform = 'scale(1)';
-    img.style.cursor = 'grab';
-    modalBody.appendChild(img);
+      // Ẩn nút zoom (không cần cho 3D)
+      document.querySelectorAll('.modal-controls .modal-btn').forEach(btn => {
+        if (btn.textContent !== '✕') btn.style.display = 'none';
+      });
+    } else {
+      // Hiển thị ảnh 2D như cũ
+      const img = document.createElement('img');
+      img.src = thumbUrl;
+      img.alt = name;
+      img.className = 'modal-img';
+      img.id = 'modal-img';
+      img.style.transform = 'scale(1)';
+      img.style.cursor = 'grab';
+      modalBody.appendChild(img);
 
-    // Reset biến zoom
-    currentZoom = 1;
-    translateX = 0;
-    translateY = 0;
+      // Reset biến zoom (được định nghĩa trong common.js)
+      if (typeof currentZoom !== 'undefined') currentZoom = 1;
+      if (typeof translateX !== 'undefined') translateX = 0;
+      if (typeof translateY !== 'undefined') translateY = 0;
 
-    // Hiện lại nút zoom
-    document.querySelectorAll('.modal-controls .modal-btn').forEach(btn => {
-      if (btn.textContent !== '✕') btn.style.display = 'flex';
-    });
-  }
+      // Hiện lại nút zoom
+      document.querySelectorAll('.modal-controls .modal-btn').forEach(btn => {
+        if (btn.textContent !== '✕') btn.style.display = 'flex';
+      });
+    }
 
-  document.getElementById('modal').classList.add('show');
+    document.getElementById('modal').classList.add('show');
   };
 
   /* ATTACH CARD EVENTS */
@@ -166,6 +168,7 @@ window.openModal = function(name, type, date, size, url, thumbUrl, filepath) {
     div.className = 'img-card';
     div.dataset.name = item.name;
     div.dataset.type = item.original_type;
+    div.dataset.subtype = item.subtype || '';  // <-- thêm subtype cho trash
     div.dataset.date = item.date_str;
     div.dataset.size = item.size;
     div.dataset.url = '#';
@@ -248,17 +251,29 @@ window.openModal = function(name, type, date, size, url, thumbUrl, filepath) {
     window.location.href = '/train';
   });
 
-  /* SEARCH */
-  document.getElementById('searchInput').addEventListener('input', function(e) {
-    const keyword = e.target.value.toLowerCase();
+  /* FILTER & SEARCH (combined) */
+  const filterTypeSelect = document.getElementById('filterTypeSelect');
+  const searchInput = document.getElementById('searchInput');
+
+  function filterCards() {
     const activeTab = document.querySelector('.tab.active')?.dataset.tab;
     const container = activeTab ? document.getElementById(`tab-${activeTab}`) : document.querySelector('.tab-content:not([style*="none"])');
     if (!container) return;
+
+    const searchKeyword = searchInput.value.toLowerCase();
+    const filterType = filterTypeSelect.value;
+
     container.querySelectorAll('.img-card').forEach(card => {
       const name = card.querySelector('.img-name')?.textContent.toLowerCase() || '';
-      card.style.display = name.includes(keyword) ? '' : 'none';
+      const subtype = card.dataset.subtype || '';
+      const matchesSearch = name.includes(searchKeyword);
+      const matchesType = (filterType === 'all') || (subtype === filterType);
+      card.style.display = (matchesSearch && matchesType) ? '' : 'none';
     });
-  });
+  }
+
+  filterTypeSelect.addEventListener('change', filterCards);
+  searchInput.addEventListener('input', filterCards);
 
   /* LAZY LOADING THUMBNAILS */
   const observer = new IntersectionObserver((entries) => {

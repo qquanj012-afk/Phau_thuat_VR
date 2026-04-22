@@ -30,6 +30,11 @@
         <option value="name_asc" {% if current_sort == 'name_asc' %}selected{% endif %}>Tên A-Z</option>
         <option value="name_desc" {% if current_sort == 'name_desc' %}selected{% endif %}>Tên Z-A</option>
       </select>
+      <select class="filter-btn" id="filterTypeSelect">
+        <option value="all">Tất cả</option>
+        <option value="liver">Gan</option>
+        <option value="tumor">Khối u</option>
+      </select>
     </div>
     <button class="add-btn" id="addNewBtn">+ Thêm mới</button>
   </div>
@@ -38,7 +43,7 @@
   <div id="tab-raw" class="tab-content">
     <div class="image-grid">
       {% for item in raw_items %}
-      <div class="img-card" data-name="{{ item.name }}" data-type="raw" data-date="{{ item.date_str }}" data-size="{{ item.size }}" data-url="{{ item.url }}" data-thumb="{{ item.thumb }}" data-filepath="{{ item.file_path }}">
+      <div class="img-card" data-name="{{ item.name }}" data-type="raw" data-subtype="{{ item.subtype }}" data-date="{{ item.date_str }}" data-size="{{ item.size }}" data-url="{{ item.url }}" data-thumb="{{ item.thumb }}" data-filepath="{{ item.file_path }}">
         <div class="img-thumb">
           <img class="img-thumb-img" src="{{ item.thumb }}" data-file="{{ item.file_path }}" alt="{{ item.name }}"
                onerror="this.onerror=null; this.src='data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'100\' height=\'100\' viewBox=\'0 0 100 100\'%3E%3Crect width=\'100\' height=\'100\' fill=\'%23171b26\'/%3E%3Ctext x=\'50\' y=\'55\' font-family=\'monospace\' font-size=\'12\' fill=\'%235a6280\' text-anchor=\'middle\'%3E📄 NIfTI%3C/text%3E%3C/svg%3E';">
@@ -61,7 +66,7 @@
   <div id="tab-processed" class="tab-content" style="display:none">
     <div class="image-grid">
       {% for item in processed_items %}
-      <div class="img-card" data-name="{{ item.name }}" data-type="processed" data-date="{{ item.date_str }}" data-size="{{ item.size }}" data-url="{{ item.url }}" data-thumb="{{ item.thumb }}" data-filepath="{{ item.file_path }}">
+      <div class="img-card" data-name="{{ item.name }}" data-type="processed" data-subtype="{{ item.subtype }}" data-date="{{ item.date_str }}" data-size="{{ item.size }}" data-url="{{ item.url }}" data-thumb="{{ item.thumb }}" data-filepath="{{ item.file_path }}">
         <div class="img-thumb">
           <img class="img-thumb-img" src="{{ item.thumb }}" data-file="{{ item.file_path }}" alt="{{ item.name }}"
                onerror="this.onerror=null; this.src='data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'100\' height=\'100\' viewBox=\'0 0 100 100\'%3E%3Crect width=\'100\' height=\'100\' fill=\'%23171b26\'/%3E%3Ctext x=\'50\' y=\'55\' font-family=\'monospace\' font-size=\'12\' fill=\'%235a6280\' text-anchor=\'middle\'%3E⚙️ Processed%3C/text%3E%3C/svg%3E';">
@@ -84,7 +89,7 @@
   <div id="tab-meshes" class="tab-content" style="display:none">
     <div class="image-grid">
       {% for item in mesh_items %}
-      <div class="img-card" data-name="{{ item.name }}" data-type="meshes" data-date="{{ item.date_str }}" data-size="{{ item.size }}" data-url="{{ item.url }}" data-thumb="{{ item.thumb }}" data-filepath="{{ item.file_path }}">
+      <div class="img-card" data-name="{{ item.name }}" data-type="meshes" data-subtype="{{ item.subtype }}" data-date="{{ item.date_str }}" data-size="{{ item.size }}" data-url="{{ item.url }}" data-thumb="{{ item.thumb }}" data-filepath="{{ item.file_path }}">
         <div class="img-thumb">
           <img class="img-thumb-img" src="{{ item.thumb }}" data-file="{{ item.file_path }}" alt="{{ item.name }}"
                onerror="this.onerror=null; this.src='data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'100\' height=\'100\' viewBox=\'0 0 100 100\'%3E%3Crect width=\'100\' height=\'100\' fill=\'%23171b26\'/%3E%3Ctext x=\'50\' y=\'55\' font-family=\'monospace\' font-size=\'12\' fill=\'%235a6280\' text-anchor=\'middle\'%3E◈ Mesh%3C/text%3E%3C/svg%3E';">
