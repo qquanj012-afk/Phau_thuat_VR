@@ -31,21 +31,29 @@ def add_coordinate_channels(img_size):
     xx, yy = np.meshgrid(np.linspace(0, 1, w), np.linspace(0, 1, h))
     return xx.astype(np.float32), yy.astype(np.float32)
 
-def preprocess_slice(slice_img, window_func, target_size=TARGET_SIZE):
+
+def preprocess_slice(slice_img, window_func, target_size):
     """
-    Tiền xử lý một lát cắt 2D.
-    - Áp dụng window
-    - Resize
-    - Thêm kênh tọa độ (nếu được cấu hình)
-    Trả về mảng (H, W, C).
+    Tiền xử lý một lát cắt CT.
+    Nếu target_size = (0,0) thì giữ nguyên kích thước.
     """
+    # Áp dụng cửa sổ HU (ví dụ liver window)
     img_win = window_func(slice_img)
-    img_res = cv2.resize(img_win, target_size, interpolation=cv2.INTER_LINEAR)
-    if ADD_COORDINATE_CHANNELS:
-        coord_x, coord_y = add_coordinate_channels(target_size)
-        return np.stack([img_res, coord_x, coord_y], axis=-1)
+
+    # Resize nếu target_size > 0
+    if target_size[0] > 0 and target_size[1] > 0:
+        img_res = cv2.resize(img_win, target_size, interpolation=cv2.INTER_LINEAR)
     else:
-        return np.expand_dims(img_res, axis=-1)
+        img_res = img_win
+
+    # Chuẩn hóa về [0, 1]
+    img_min, img_max = img_res.min(), img_res.max()
+    if img_max - img_min > 1e-8:
+        img_norm = (img_res - img_min) / (img_max - img_min)
+    else:
+        img_norm = img_res - img_min
+
+    return img_norm.astype(np.float32)
 
 def load_and_preprocess_volume(file_path, window_type='liver'):
     """

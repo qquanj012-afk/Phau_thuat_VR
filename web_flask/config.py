@@ -17,6 +17,7 @@ PROCESSED_DIR = BASE_DIR / config['paths']['processed_data']
 MESHES_DIR = BASE_DIR / config['paths']['meshes']
 CHECKPOINTS_DIR = BASE_DIR / config['paths']['checkpoints']
 TEMP_DIR = BASE_DIR / config['paths']['temp']
+THUMBNAILS_DIR = BASE_DIR / config['paths']['thumbnails']
 
 # Cấu hình web
 WEB_HOST = config['web']['host']

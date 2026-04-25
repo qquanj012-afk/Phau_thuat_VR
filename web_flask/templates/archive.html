@@ -31,9 +31,9 @@
         <option value="name_desc" {% if current_sort == 'name_desc' %}selected{% endif %}>Tên Z-A</option>
       </select>
       <select class="filter-btn" id="filterTypeSelect">
-        <option value="all">Tất cả</option>
-        <option value="liver">Gan</option>
-        <option value="tumor">Khối u</option>
+        <option value="all">Tất cả (0)</option>
+        <option value="liver">Gan (0)</option>
+        <option value="tumor">Khối u (0)</option>
       </select>
     </div>
     <button class="add-btn" id="addNewBtn">+ Thêm mới</button>
@@ -129,6 +129,13 @@
     items: '{{ url_for("archive.trash_items") }}',
     restore: '{{ url_for("archive.restore_file", filepath="") }}',
     permanent: '{{ url_for("archive.permanent_delete", filepath="") }}'
+  };
+</script>
+<script>
+  window.SUBTYPE_COUNTS = {
+    raw: { liver: {{ raw_liver }}, tumor: {{ raw_tumor }} },
+    processed: { liver: {{ processed_liver }}, tumor: {{ processed_tumor }} },
+    meshes: { liver: {{ mesh_liver }}, tumor: {{ mesh_tumor }} }
   };
 </script>
 {% endblock %}

@@ -18,6 +18,7 @@ MESHES_DIR = BASE_DIR / config['paths']['meshes']
 CHECKPOINTS_DIR = BASE_DIR / config['paths']['checkpoints']
 TEMP_DIR = BASE_DIR / config['paths']['temp']
 LOGS_DIR = BASE_DIR / config['paths']['logs']
+THUMBNAILS_DIR = BASE_DIR / config['paths']['thumbnails']
 
 # Tiền xử lý
 TARGET_SIZE = tuple(config['preprocessing']['target_size'])

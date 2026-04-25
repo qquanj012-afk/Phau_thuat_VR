@@ -7,6 +7,10 @@ document.addEventListener('DOMContentLoaded', function() {
   const tabMeshes = document.getElementById('tab-meshes');
   const tabTrash = document.getElementById('tab-trash');
 
+  // Xác định tab đang active lúc load trang
+  const activeTabOnLoad = document.querySelector('.tab.active')?.dataset.tab || 'raw';
+  updateFilterCounts(activeTabOnLoad);
+
   window.switchTab = function(tabId) {
     tabs.forEach(t => t.classList.remove('active'));
     document.querySelector(`.tab[data-tab="${tabId}"]`).classList.add('active');
@@ -19,6 +23,7 @@ document.addEventListener('DOMContentLoaded', function() {
       loadTrashItems();
     } else {
       filterCards();
+      updateFilterCounts(tabId);
     }
   };
 
@@ -41,8 +46,9 @@ document.addEventListener('DOMContentLoaded', function() {
    * FIX BUG 3: không có cleanup → memory leak
    * ───────────────────────────────────────────────────────────── */
   let threeCleanup = null;   // FIX BUG 3: lưu hàm cleanup
+  let compareCleanup = null;   // Dọn dẹp Three.js khi đóng modal so sánh
 
-  function initOBJViewer(container, objUrl, filename) {
+  function initOBJViewer(container, objUrl, filename, onCleanup) {
     // Cleanup scene cũ nếu có (FIX BUG 3)
     if (threeCleanup) { threeCleanup(); threeCleanup = null; }
 
@@ -234,11 +240,11 @@ document.addEventListener('DOMContentLoaded', function() {
     window.addEventListener('resize', onResize);
 
     /* ── FIX BUG 3: Cleanup khi đóng modal ── */
-    threeCleanup = () => {
+        // Cleanup
+    const cleanup = () => {
       cancelAnimationFrame(animId);
       window.removeEventListener('resize', onResize);
       controls.dispose();
-      // Giải phóng geometry & material
       scene.traverse(obj => {
         if (obj.isMesh) {
           obj.geometry?.dispose();
@@ -251,6 +257,12 @@ document.addEventListener('DOMContentLoaded', function() {
       });
       renderer.dispose();
     };
+
+    if (onCleanup) {
+      onCleanup(cleanup);
+    } else {
+      threeCleanup = cleanup;
+    }
   }
 
   /* ─────────────────────────────────────────────────────────────
@@ -273,7 +285,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     if (isMesh && url && url !== '#') {
       /* ── 3D Viewer: dùng Three.js (KHÔNG dùng model-viewer) ── */
-      initOBJViewer(modalBody, url, name);
+      initOBJViewer(modalBody, url, name, null);
 
       // Ẩn nút zoom 2D (không cần cho 3D)
       document.querySelectorAll('.modal-controls .modal-btn').forEach(btn => {
@@ -294,7 +306,7 @@ document.addEventListener('DOMContentLoaded', function() {
       });
 
     } else {
-      /* ── Ảnh 2D như cũ ── */
+      /* ── Ảnh 2D ── */
       const img = document.createElement('img');
       img.src = thumbUrl;
       img.alt = name;
@@ -357,6 +369,11 @@ document.addEventListener('DOMContentLoaded', function() {
         if (url && url !== '#') window.open(url, '_blank');
       });
 
+      card.querySelector('.compare-btn')?.addEventListener('click', (e) => {
+        e.stopPropagation();
+        openCompareModal(card);
+      });
+
       card.querySelector('.del-btn')?.addEventListener('click', (e) => {
         e.stopPropagation();
         deleteFile(filepath, type);
@@ -365,6 +382,28 @@ document.addEventListener('DOMContentLoaded', function() {
   }
 
   attachCardEvents(document);
+
+  /* Mở modal so sánh từ ảnh đang xem trong modal thường */
+window.openCompareFromModal = function() {
+  // Kiểm tra xem có file hiện tại không (được lưu khi openModal)
+  if (!currentFile || !currentFile.filepath) {
+    showToast('Không có file để so sánh', true);
+    return;
+  }
+
+  // Tìm thẻ card gốc dựa vào filepath
+  const card = document.querySelector(`.img-card[data-filepath="${currentFile.filepath}"]`);
+  if (!card) {
+    showToast('Không tìm thấy thẻ ảnh gốc', true);
+    return;
+  }
+
+  // Đóng modal thường
+  closeModal();
+
+  // Mở modal so sánh (hàm openCompareModal đã có từ trước)
+  openCompareModal(card);
+};
 
   /* ─────────────────────────────────────────────────────────────
    * FILE DELETION
@@ -400,6 +439,10 @@ document.addEventListener('DOMContentLoaded', function() {
       });
       attachCardEvents(grid);
       observeThumbnails(grid);
+
+      const liverCount = items.filter(it => it.subtype === 'liver').length;
+      const tumorCount = items.filter(it => it.subtype === 'tumor').length;
+      updateFilterCountsWithData(liverCount + tumorCount, liverCount, tumorCount);
     } catch(e) {
       grid.innerHTML = '<div style="color:var(--danger);padding:20px;">Lỗi tải thùng rác</div>';
     }
@@ -500,6 +543,23 @@ document.addEventListener('DOMContentLoaded', function() {
   searchInput.addEventListener('input', filterCards);
 
   /* ─────────────────────────────────────────────────────────────
+   * UPDATE FILTER COUNTS PER TAB
+   * ───────────────────────────────────────────────────────────── */
+  function updateFilterCountsWithData(total, liver, tumor) {
+    const filterSelect = document.getElementById('filterTypeSelect');
+    if (!filterSelect) return;
+    filterSelect.querySelector('option[value="all"]').textContent = `Tất cả (${total})`;
+    filterSelect.querySelector('option[value="liver"]').textContent = `Gan (${liver})`;
+    filterSelect.querySelector('option[value="tumor"]').textContent = `Khối u (${tumor})`;
+  }
+
+  function updateFilterCounts(tabId) {
+  const counts = window.SUBTYPE_COUNTS[tabId] || { liver: 0, tumor: 0 };
+  const total = counts.liver + counts.tumor;
+  updateFilterCountsWithData(total, counts.liver, counts.tumor);
+  }
+
+  /* ─────────────────────────────────────────────────────────────
    * LAZY LOADING THUMBNAILS
    * ───────────────────────────────────────────────────────────── */
   const observer = new IntersectionObserver((entries) => {
@@ -529,4 +589,78 @@ document.addEventListener('DOMContentLoaded', function() {
   document.getElementById('deleteModalBtn')?.addEventListener('click', () => {
     if (currentFile.filepath) { deleteFile(currentFile.filepath, currentFile.type); closeModal(); }
   });
+
+    /* COMPARE FUNCTIONALITY */
+  async function openCompareModal(card) {
+    const name = card.dataset.name;
+    const filepath = card.dataset.filepath;
+    const url = card.dataset.url;
+    const type = card.dataset.type;
+    const isMesh = name.toLowerCase().endsWith('.obj') || type === 'meshes';
+
+    const modal = document.getElementById('compareModal');
+    document.getElementById('compare-title').textContent = `So sánh: ${name}`;
+
+    const leftPane = document.getElementById('left-pane');
+    const rightPane = document.getElementById('right-pane');
+    leftPane.innerHTML = '';
+    rightPane.innerHTML = '';
+    if (compareCleanup) { compareCleanup(); compareCleanup = null; }
+
+    // Hiển thị ảnh hiện tại bên trái
+    renderPaneContent(leftPane, name, url, isMesh, filepath);
+
+    // Gọi API tìm file ghép cặp
+    try {
+      const res = await fetch('/archive/find_pair', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ file_path: filepath })
+      });
+      const data = await res.json();
+      if (data.error) {
+        rightPane.innerHTML = `<div style="color:var(--text3);">⚠️ ${data.error}</div>`;
+      } else {
+        const isPairMesh = data.name.toLowerCase().endsWith('.obj');
+        renderPaneContent(rightPane, data.name, data.url, isPairMesh, data.subpath);
+      }
+    } catch (err) {
+      rightPane.innerHTML = `<div style="color:var(--danger);">Lỗi kết nối</div>`;
+    }
+
+    modal.classList.add('show');
+  }
+
+  function renderPaneContent(container, name, url, isMesh, filepath) {
+    if (isMesh && url && url !== '#') {
+      // Dùng Three.js viewer, truyền callback cleanup
+      initOBJViewer(container, url, name, (cleanup) => { compareCleanup = cleanup; });
+    } else if (isMesh) {
+      container.innerHTML = `<div style="color:var(--text3);">Mesh không khả dụng</div>`;
+    } else {
+      // Ảnh 2D: gọi API thumbnail để lấy ảnh PNG
+      fetch(`/archive/api/thumbnail?file=${encodeURIComponent(filepath)}`)
+        .then(res => res.json())
+        .then(data => {
+          const img = document.createElement('img');
+          img.src = data.thumb_url || url;
+          img.alt = name;
+          container.appendChild(img);
+        })
+        .catch(() => {
+          const img = document.createElement('img');
+          img.src = url;
+          img.alt = name;
+          container.appendChild(img);
+        });
+    }
+  }
+
+  function closeCompareModal() {
+    document.getElementById('compareModal').classList.remove('show');
+    if (compareCleanup) { compareCleanup(); compareCleanup = null; }
+  }
+
+  // Gắn sự kiện cho nút đóng modal so sánh nếu có
+  document.getElementById('compareCloseBtn')?.addEventListener('click', closeCompareModal);
 });

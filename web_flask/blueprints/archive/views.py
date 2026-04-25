@@ -4,47 +4,14 @@ import shutil
 from datetime import datetime
 from pathlib import Path
 from flask import Blueprint, render_template, jsonify, request, url_for
+from web_flask.utils.data_counts import *
+from web_flask.utils.image_converter import *
 
 archive_bp = Blueprint('archive', __name__, template_folder='../../templates')
 
-BASE_DIR = Path(__file__).resolve().parent.parent.parent.parent
-WEB_FLASK_DIR = BASE_DIR / 'web_flask'
-sys.path.append(str(WEB_FLASK_DIR))
-from utils.image_converter import generate_thumbnail
-
-DATA_DIR = BASE_DIR / 'data'
-TRASH_DIR = DATA_DIR / '.trash'
 os.makedirs(TRASH_DIR / 'raw', exist_ok=True)
 os.makedirs(TRASH_DIR / 'processed', exist_ok=True)
 os.makedirs(TRASH_DIR / 'meshes', exist_ok=True)
-
-MEDICAL_EXTS = {'.nii', '.nii.gz', '.dcm', '.dicom', '.mhd', '.mha', '.nrrd', '.png', '.jpg', '.jpeg', '.npy'}
-MESH_EXTS = {'.obj', '.stl', '.ply', '.glb', '.gltf'}
-
-def count_files(path, extensions):
-    if not path.exists():
-        return 0
-    total = 0
-    for root, _, files in os.walk(path):
-        for f in files:
-            if any(f.lower().endswith(ext) for ext in extensions):
-                total += 1
-    return total
-
-def get_raw_count():
-    return count_files(DATA_DIR / 'raw' / 'liver', MEDICAL_EXTS) + \
-           count_files(DATA_DIR / 'raw' / 'tumor', MEDICAL_EXTS)
-
-def get_processed_count():
-    return count_files(DATA_DIR / 'processed' / 'liver', MEDICAL_EXTS) + \
-           count_files(DATA_DIR / 'processed' / 'tumor', MEDICAL_EXTS)
-
-def get_mesh_count():
-    return count_files(DATA_DIR / 'meshes' / 'liver', MESH_EXTS) + \
-           count_files(DATA_DIR / 'meshes' / 'tumor', MESH_EXTS)
-
-def get_trash_count():
-    return count_files(TRASH_DIR, MEDICAL_EXTS | MESH_EXTS)
 
 def scan_directory(subdir, extensions, type_name, sort_by='date_desc', is_trash=False, raw_subfolder=None):
     items = []
@@ -65,6 +32,10 @@ def scan_directory(subdir, extensions, type_name, sort_by='date_desc', is_trash=
             subtype = 'unknown'
 
         for f in files:
+            # Lọc file: nếu type là processed, chỉ lấy *_img.npy
+            if type_name == 'processed' and not f.endswith('_img.npy'):
+                continue
+            # Nếu type là raw, lấy tất cả file trong imagesTr (đã giới hạn bởi raw_subfolder)
             if any(f.lower().endswith(ext) for ext in extensions):
                 full = Path(root) / f
                 stat = full.stat()
@@ -74,6 +45,10 @@ def scan_directory(subdir, extensions, type_name, sort_by='date_desc', is_trash=
                     rel = str(full.relative_to(DATA_DIR)).replace('\\', '/')
                 url = url_for('serve_data', subpath=rel) if not is_trash else '#'
 
+                thumb_rel = rel.replace('data/', '')
+                thumb_rel = thumb_rel.replace('.nii.gz', '.png').replace('.nii', '.png').replace('.npy', '.png').replace('.obj', '.png')
+                thumb_url = url_for('static', filename=f'thumbnails/{thumb_rel}')
+
                 items.append({
                     'name': f,
                     'date': stat.st_mtime,
@@ -81,7 +56,7 @@ def scan_directory(subdir, extensions, type_name, sort_by='date_desc', is_trash=
                     'size': f"{stat.st_size/1024/1024:.1f} MB" if stat.st_size > 1024*1024 else f"{stat.st_size/1024:.0f} KB",
                     'url': url,
                     'file_path': rel,
-                    'thumb': url_for('static', filename='placeholder.png'),
+                    'thumb': thumb_url,
                     'type': type_name,
                     'subtype': subtype,
                     'original_type': subdir
@@ -97,22 +72,29 @@ def scan_directory(subdir, extensions, type_name, sort_by='date_desc', is_trash=
     else:
         items.sort(key=lambda x: x['date'], reverse=True)
     return items
+
 @archive_bp.route('/')
 def archive_page():
     sort = request.args.get('sort', 'date_desc')
 
     raw_liver_items = scan_directory('raw/liver', MEDICAL_EXTS, 'raw', sort, raw_subfolder='imagesTr')
+    raw_tumor_items = scan_directory('raw/tumor', MEDICAL_EXTS, 'raw', sort)
     for item in raw_liver_items:
         item['subtype'] = 'liver'
-
-    raw_tumor_items = scan_directory('raw/liver', MEDICAL_EXTS, 'raw', sort, raw_subfolder='labelsTr')
     for item in raw_tumor_items:
         item['subtype'] = 'tumor'
-
     raw_items = raw_liver_items + raw_tumor_items
 
     processed_items = scan_directory('processed', MEDICAL_EXTS, 'processed', sort)
     mesh_items = scan_directory('meshes', MESH_EXTS, 'mesh', sort)
+
+    # Đếm theo subtype cho dropdown
+    raw_liver_count = count_subtype(raw_items, 'liver')
+    raw_tumor_count = count_subtype(raw_items, 'tumor')
+    processed_liver_count = count_subtype(processed_items, 'liver')
+    processed_tumor_count = count_subtype(processed_items, 'tumor')
+    mesh_liver_count = count_subtype(mesh_items, 'liver')
+    mesh_tumor_count = count_subtype(mesh_items, 'tumor')
 
     return render_template('archive.html',
                            raw_count=len(raw_items),
@@ -122,7 +104,14 @@ def archive_page():
                            raw_items=raw_items,
                            processed_items=processed_items,
                            mesh_items=mesh_items,
-                           current_sort=sort)
+                           current_sort=sort,
+                           raw_liver=raw_liver_count,
+                           raw_tumor=raw_tumor_count,
+                           processed_liver=processed_liver_count,
+                           processed_tumor=processed_tumor_count,
+                           mesh_liver=mesh_liver_count,
+                           mesh_tumor=mesh_tumor_count)
+
 @archive_bp.route('/api/thumbnail')
 def api_thumbnail():
     file_path = request.args.get('file')

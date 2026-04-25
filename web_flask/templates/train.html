@@ -23,9 +23,13 @@
 
         <div id="url-panel">
           <div class="input-group">
-            <label class="input-label">URL ảnh</label>
-            <input class="url-input" type="text" id="img-url" placeholder="Nhập đường dẫn file ảnh">
+            <label class="input-label">URL ảnh CT (.nii, .nii.gz, .dcm)</label>
+            <input class="url-input" type="text" id="img-url" placeholder="https://example.com/ct_scan.nii.gz">
             <div class="url-status" id="url-status"></div>
+          </div>
+          <div class="input-group">
+            <label class="input-label">URL mask (tùy chọn)</label>
+            <input class="url-input" type="text" id="mask-url" placeholder="https://example.com/mask.nii.gz">
           </div>
           <div class="input-group">
             <label class="input-label">Tên bệnh nhân (nhãn)</label>
@@ -33,21 +37,31 @@
           </div>
         </div>
 
-        <div id="file-panel" style="display:none">
-          <div class="dropzone" id="dropzone">
+        <div id="file-panel" class="hidden">
+          <div class="dropzone" id="dropzone-ct" onclick="document.getElementById('file-input-ct').click()">
             <div class="drop-icon">📂</div>
-            <div class="drop-text" id="drop-text">Kéo & thả file vào đây</div>
-            <div class="drop-sub">Hỗ trợ: .nii, .nii.gz, .dcm, .png, .jpg</div>
-            <div class="preview-container" id="file-preview-container" style="display:none;">
-              <img id="file-preview-img" class="dropzone-preview" src="" alt="Preview">
+            <div class="drop-text" id="drop-text-ct">Kéo & thả ảnh CT vào đây (.nii, .nii.gz, .dcm)</div>
+            <div class="drop-sub">Hỗ trợ: .nii, .nii.gz, .dcm</div>
+            <div class="preview-container hidden" id="file-preview-container-ct">
+              <img id="file-preview-img-ct" class="dropzone-preview" src="" alt="CT Preview">
             </div>
           </div>
-          <input type="file" id="file-input" style="display:none" accept=".nii,.gz,.dcm,.png,.jpg,.jpeg">
+          <input type="file" id="file-input-ct" class="hidden" accept=".nii,.gz,.dcm">
+
+          <div class="dropzone dropzone-mask" id="dropzone-mask" onclick="document.getElementById('file-input-mask').click()">
+            <div class="drop-icon">🏷️</div>
+            <div class="drop-text" id="drop-text-mask">Kéo & thả mask vào đây (tùy chọn)</div>
+            <div class="drop-sub">Hỗ trợ: .nii, .nii.gz, .dcm</div>
+            <div class="preview-container hidden" id="file-preview-container-mask">
+              <img id="file-preview-img-mask" class="dropzone-preview" src="" alt="Mask Preview">
+            </div>
+          </div>
+          <input type="file" id="file-input-mask" class="hidden" accept=".nii,.gz,.dcm">
         </div>
 
         <button class="train-btn" id="train-btn">▶ BẮT ĐẦU HUẤN LUYỆN</button>
 
-        <div class="progress-wrap" id="progress-wrap">
+        <div class="progress-wrap hidden" id="progress-wrap">
           <div class="progress-label">
             <span id="progress-status">Đang xử lý...</span>
             <span id="progress-pct">0%</span>
@@ -63,14 +77,13 @@
         </div>
       </div>
 
-      <div class="card" style="margin-top:16px">
+      <div class="card card-settings">
         <div class="card-title">Cài đặt training</div>
         <div class="input-group">
           <label class="input-label">Model</label>
           <select class="url-input" id="model-select">
-            <option value="unet_liver">U-Net (Liver)</option>
-            <option value="resunet" selected>ResU-Net (Enhanced)</option>
-            <option value="transunet">TransUNet</option>
+            <option value="liver">U-Net (Liver)</option>
+            <option value="tumor">U-Net (Tumor)</option>
           </select>
         </div>
         <div class="input-group">
@@ -82,39 +95,28 @@
 
     <!-- RESULT PANEL -->
     <div>
-      <div class="card" style="min-height:400px">
+      <div class="card card-result">
         <div class="card-title">Kết quả huấn luyện</div>
 
-        <div id="result-empty" style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:320px;color:var(--text3)">
-          <div style="font-size:3rem;margin-bottom:1rem;opacity:0.3">◎</div>
-          <div style="font-family:var(--font-mono);font-size:0.8rem">Chưa có kết quả</div>
-          <div style="font-size:0.75rem;margin-top:4px">Upload ảnh và nhấn Train</div>
+        <div id="result-empty" class="result-empty">
+          <div class="result-empty-icon">◎</div>
+          <div class="result-empty-text">Chưa có kết quả</div>
+          <div class="result-empty-hint">Upload ảnh và nhấn Train</div>
         </div>
 
-        <div class="result-preview" id="result-preview" style="display:none;">
-          <div style="display:flex;gap:8px;margin-bottom:12px">
-            <div style="font-family:var(--font-mono);font-size:0.75rem;color:var(--teal)">✓ Huấn luyện hoàn tất</div>
-            <div style="font-family:var(--font-mono);font-size:0.72rem;color:var(--text3);margin-left:auto">Accuracy: <span style="color:var(--teal)" id="result-acc">94.8%</span></div>
+        <div class="result-preview hidden" id="result-preview">
+          <div class="result-header">
+            <div class="result-status">✓ Huấn luyện hoàn tất</div>
           </div>
           <div class="preview-grid">
-            <div class="preview-img" id="preview-raw-container" style="display:none;">
-              <img id="preview-raw" src="" alt="raw">
-              <div class="preview-tag tag-raw">RAW</div>
-            </div>
             <div class="preview-img" id="preview-processed-container">
               <img id="preview-processed" src="" alt="processed" onerror="this.src='data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'300\' height=\'300\'%3E%3Crect width=\'300\' height=\'300\' fill=\'%231e2333\'/%3E%3Ctext x=\'150\' y=\'155\' font-family=\'monospace\' font-size=\'14\' fill=\'%2300d4aa\' text-anchor=\'middle\'%3EPROCESSED%3C/text%3E%3C/svg%3E'">
               <div class="preview-tag tag-proc">PROCESSED</div>
             </div>
-            <div class="preview-img" id="preview-mesh-container" style="display:none;">
+            <div class="preview-img hidden" id="preview-mesh-container">
               <img id="preview-mesh" src="" alt="mesh" onerror="this.src='data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'300\' height=\'300\'%3E%3Crect width=\'300\' height=\'300\' fill=\'%231e2333\'/%3E%3Ctext x=\'150\' y=\'155\' font-family=\'monospace\' font-size=\'14\' fill=\'%23ffb347\' text-anchor=\'middle\'%3EMESH%3C/text%3E%3C/svg%3E'">
               <div class="preview-tag tag-mesh">MESH</div>
             </div>
-          </div>
-          <div style="background:var(--bg3);border-radius:var(--radius);padding:10px 14px;margin-bottom:1rem;font-family:var(--font-mono);font-size:0.72rem;color:var(--text2);line-height:1.6">
-            <div style="color:var(--teal);margin-bottom:4px">Thông tin phân tích:</div>
-            <div>Kích thước khối u: <span style="color:var(--text)" id="tumor-size">-</span></div>
-            <div>Vị trí: <span style="color:var(--text)" id="tumor-location">-</span></div>
-            <div>Dice coefficient: <span style="color:var(--text)" id="dice-coeff">-</span></div>
           </div>
           <div class="result-actions">
             <button class="btn-save" id="saveResultBtn">💾 Lưu vào Archive</button>

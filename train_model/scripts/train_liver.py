@@ -1,6 +1,7 @@
 import sys
 import argparse
-import tensorboard
+import csv
+from datetime import datetime
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -8,7 +9,6 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 import torch
 import torch.optim as optim
 from torch.utils.data import DataLoader
-from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 import numpy as np
 
@@ -26,8 +26,9 @@ def train_epoch(model, dataloader, optimizer, criterion, device):
     model.train()
     total_loss = 0.0
     for images, masks in tqdm(dataloader, desc="Training"):
+        # images: (B, H, W, C) -> (B, C, H, W)
         images = images.permute(0, 3, 1, 2).float().to(device)
-        masks = masks.unsqueeze(1).float().to(device)
+        masks = masks.unsqueeze(1).float().to(device)  # (B, 1, H, W)
 
         optimizer.zero_grad()
         outputs = model(images)
@@ -46,7 +47,6 @@ def validate_epoch(model, dataloader, criterion, device):
         for images, masks in tqdm(dataloader, desc="Validation"):
             images = images.permute(0, 3, 1, 2).float().to(device)
             masks = masks.unsqueeze(1).float().to(device)
-
             outputs = model(images)
             loss = criterion(outputs, masks)
             total_loss += loss.item()
@@ -58,6 +58,7 @@ def main():
     parser.add_argument("--epochs", type=int, default=NUM_EPOCHS)
     parser.add_argument("--batch_size", type=int, default=BATCH_SIZE)
     parser.add_argument("--lr", type=float, default=LEARNING_RATE)
+    parser.add_argument("--weight_decay", type=float, default=1e-5, help="L2 regularization")
     args = parser.parse_args()
 
     set_seed(42)
@@ -81,18 +82,28 @@ def main():
     # 2. Model, Loss, Optimizer
     model = UNet(n_channels=3, n_classes=1).to(device)
     criterion = BCEDiceLoss()
-    optimizer = optim.Adam(model.parameters(), lr=args.lr)
+    optimizer = optim.Adam(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
 
-    writer = SummaryWriter(LOGS_DIR / "liver")
+    # 3. CSV Logger
+    logs_dir = LOGS_DIR / "liver"
+    logs_dir.mkdir(parents=True, exist_ok=True)
+    csv_path = logs_dir / "train.csv"
+    csv_file = open(csv_path, 'w', newline='', encoding='utf-8')
+    csv_writer = csv.writer(csv_file)
+    csv_writer.writerow(['epoch', 'train_loss', 'val_loss', 'timestamp'])
+
     best_val_loss = float("inf")
 
-    # 3. Training loop
+    # 4. Training loop
     for epoch in range(1, args.epochs + 1):
         print(f"\n--- Epoch {epoch}/{args.epochs} ---")
         train_loss = train_epoch(model, train_loader, optimizer, criterion, device)
         val_loss = validate_epoch(model, val_loader, criterion, device)
 
-        writer.add_scalars("Loss", {"train": train_loss, "val": val_loss}, epoch)
+        timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        csv_writer.writerow([epoch, f"{train_loss:.4f}", f"{val_loss:.4f}", timestamp])
+        csv_file.flush()  # Ghi ngay vào ổ đĩa
+
         print(f"Train Loss: {train_loss:.4f} | Val Loss: {val_loss:.4f}")
 
         if val_loss < best_val_loss:
@@ -101,7 +112,7 @@ def main():
             save_checkpoint(model, optimizer, epoch, val_loss, ckpt_path)
             print(f"💾 Đã lưu model tốt nhất: {ckpt_path}")
 
-    writer.close()
+    csv_file.close()
     print("✅ Huấn luyện hoàn tất.")
 
 

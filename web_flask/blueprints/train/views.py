@@ -15,7 +15,6 @@ from werkzeug.utils import secure_filename
 
 train_bp = Blueprint('train', __name__, template_folder='../../templates')
 
-# Đường dẫn dự án
 BASE_DIR = Path(__file__).resolve().parent.parent.parent.parent
 WEB_FLASK_DIR = BASE_DIR / 'web_flask'
 TRAIN_MODEL_DIR = BASE_DIR / 'train_model'
@@ -34,14 +33,15 @@ os.makedirs(RAW_DIR, exist_ok=True)
 os.makedirs(PROCESSED_DIR, exist_ok=True)
 os.makedirs(MESH_DIR, exist_ok=True)
 
-# Import image_converter từ web_flask.utils
 sys.path.append(str(WEB_FLASK_DIR))
 from utils.image_converter import generate_thumbnail
 
 tasks = {}
 
+ALLOWED_EXTENSIONS = {'nii', 'gz', 'dcm'}
+
 def allowed_file(filename):
-    return '.' in filename and filename.rsplit('.', 1)[1].lower() in {'nii', 'gz', 'dcm', 'png', 'jpg', 'jpeg'}
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
 def download_from_url(url, save_path):
     headers = {'User-Agent': 'Mozilla/5.0'}
@@ -51,20 +51,7 @@ def download_from_url(url, save_path):
         for chunk in response.iter_content(chunk_size=8192):
             f.write(chunk)
 
-def save_data_url(data_url, save_path):
-    header, encoded = data_url.split(',', 1)
-    ext_match = re.search(r'data:image/(\w+);base64', header)
-    ext = ext_match.group(1) if ext_match else 'jpg'
-    if ext == 'jpeg':
-        ext = 'jpg'
-    file_data = base64.b64decode(encoded)
-    base, _ = os.path.splitext(save_path)
-    save_path = f"{base}.{ext}"
-    with open(save_path, 'wb') as f:
-        f.write(file_data)
-    return save_path
-
-def run_inference_async(task_id, input_path, output_path, model_type, threshold):
+def run_inference_async(task_id, input_path, mask_path, output_path, model_type, threshold):
     task = tasks[task_id]
     task['status'] = 'running'
     task['progress'] = 0
@@ -74,7 +61,7 @@ def run_inference_async(task_id, input_path, output_path, model_type, threshold)
 
     if not script_path.exists():
         task['status'] = 'failed'
-        task['error'] = f'Script inference.py không tồn tại'
+        task['error'] = 'Script inference.py không tồn tại'
         return
 
     cmd = [
@@ -95,7 +82,6 @@ def run_inference_async(task_id, input_path, output_path, model_type, threshold)
                     process.terminate()
                     task['status'] = 'aborted'
                     return
-                # Giả lập tiến độ (có thể cải tiến sau)
                 if (TEMP_OUTPUT / f"{task_id}_seg.nii.gz").exists():
                     task['progress'] = min(task['progress'] + 1, 99)
                 time.sleep(1)
@@ -104,6 +90,7 @@ def run_inference_async(task_id, input_path, output_path, model_type, threshold)
                 task['progress'] = 100
                 task['status'] = 'completed'
                 task['temp_raw_path'] = str(input_path)
+                task['temp_mask_path'] = str(mask_path) if mask_path else None
                 task['temp_processed_path'] = str(output_path)
 
                 # Tạo mesh
@@ -115,7 +102,8 @@ def run_inference_async(task_id, input_path, output_path, model_type, threshold)
                         subprocess.run([
                             sys.executable, str(mesh_script),
                             '--input', str(output_path),
-                            '--output', str(mesh_path)
+                            '--output', str(mesh_path),
+                            '--threshold', str(threshold)
                         ], check=True, timeout=120)
                         task['temp_mesh_path'] = str(mesh_path)
                         mesh_url = generate_thumbnail(str(mesh_path)) if mesh_path.exists() else ''
@@ -127,10 +115,7 @@ def run_inference_async(task_id, input_path, output_path, model_type, threshold)
                 task['result'] = {
                     'raw_url': raw_thumb,
                     'processed_url': processed_thumb,
-                    'mesh_url': mesh_url,
-                    'tumor_size': '2.4 × 3.1 × 2.8 cm',
-                    'location': 'Thùy gan phải, segment VI',
-                    'dice': 0.891
+                    'mesh_url': mesh_url
                 }
             else:
                 task['status'] = 'failed'
@@ -154,6 +139,7 @@ def start_training():
     model_type = 'liver' if 'liver' in model.lower() else 'tumor'
 
     input_path = None
+    mask_path = None
     filename = None
 
     if 'file' in request.files:
@@ -165,7 +151,15 @@ def start_training():
             input_path = TEMP_UPLOAD / f"{task_id}_{filename}"
             file.save(str(input_path))
         else:
-            return jsonify({'error': 'Định dạng file không được hỗ trợ'}), 400
+            return jsonify({'error': 'Định dạng file không được hỗ trợ (chỉ .nii, .nii.gz, .dcm)'}), 400
+
+        # Xử lý mask nếu có
+        if 'mask' in request.files:
+            mask_file = request.files['mask']
+            if mask_file.filename != '' and allowed_file(mask_file.filename):
+                mask_filename = secure_filename(mask_file.filename)
+                mask_path = TEMP_UPLOAD / f"{task_id}_mask_{mask_filename}"
+                mask_file.save(str(mask_path))
     else:
         url = request.form.get('url', '').strip()
         if not url:
@@ -174,14 +168,24 @@ def start_training():
             return jsonify({'error': 'Vui lòng nhập Tên bệnh nhân (nhãn)'}), 400
 
         base_filename = label.replace(' ', '_') if label else 'downloaded'
-        input_path = TEMP_UPLOAD / f"{task_id}_{secure_filename(base_filename)}.jpg"
+        input_path = TEMP_UPLOAD / f"{task_id}_{secure_filename(base_filename)}.nii.gz"
         try:
-            if url.startswith('data:image/'):
-                input_path = Path(save_data_url(url, str(input_path)))
-            else:
-                download_from_url(url, str(input_path))
+            download_from_url(url, str(input_path))
         except Exception as e:
-            return jsonify({'error': f'Lỗi xử lý URL: {str(e)}'}), 400
+            return jsonify({'error': f'Lỗi tải URL: {str(e)}'}), 400
+
+        # Mask URL (tùy chọn)
+        mask_url = request.form.get('mask_url', '').strip()
+        if mask_url:
+            mask_path = TEMP_UPLOAD / f"{task_id}_mask_{secure_filename(base_filename)}.nii.gz"
+            try:
+                download_from_url(mask_url, str(mask_path))
+            except Exception as e:
+                print(f"Lỗi tải mask URL: {e}")
+                mask_path = None
+
+    if not input_path:
+        return jsonify({'error': 'Không có file đầu vào'}), 400
 
     output_path = TEMP_OUTPUT / f"{task_id}_seg.nii.gz"
 
@@ -189,17 +193,18 @@ def start_training():
         'id': task_id,
         'status': 'pending',
         'progress': 0,
-        'filename': filename or input_path.name,
+        'filename': filename or Path(input_path).name,
         'label': label,
         'created_at': datetime.now().isoformat(),
         'input_path': str(input_path),
+        'mask_path': str(mask_path) if mask_path else None,
         'output_path': str(output_path),
         'model': model,
         'threshold': threshold
     }
 
     thread = threading.Thread(target=run_inference_async,
-                              args=(task_id, str(input_path), str(output_path), model_type, threshold))
+                              args=(task_id, str(input_path), str(mask_path) if mask_path else None, str(output_path), model_type, threshold))
     thread.daemon = True
     thread.start()
 
@@ -211,6 +216,27 @@ def training_status(task_id):
     if not task:
         return jsonify({'error': 'Task không tồn tại'}), 404
     return jsonify({'progress': task.get('progress', 0), 'status': task.get('status', 'unknown')})
+
+@train_bp.route('/preview', methods=['POST'])
+def preview_image():
+    """Nhận file upload, lưu tạm, tạo thumbnail và trả về URL."""
+    if 'file' not in request.files:
+        return jsonify({'error': 'Không có file'}), 400
+    file = request.files['file']
+    if file.filename == '':
+        return jsonify({'error': 'Chưa chọn file'}), 400
+    if not allowed_file(file.filename):
+        return jsonify({'error': 'Định dạng không được hỗ trợ (chỉ .nii, .nii.gz, .dcm)'}), 400
+
+    # Lưu tạm
+    filename = secure_filename(file.filename)
+    task_id = str(uuid.uuid4())[:8]
+    temp_path = TEMP_UPLOAD / f"{task_id}_{filename}"
+    file.save(str(temp_path))
+
+    # Tạo thumbnail
+    thumb_url = generate_thumbnail(str(temp_path))
+    return jsonify({'thumb_url': thumb_url})
 
 @train_bp.route('/result/<task_id>')
 def training_result(task_id):
@@ -238,28 +264,38 @@ def save_result():
     if not safe_name:
         safe_name = f"result_{task_id[:8]}"
 
-    raw_ext = Path(task['temp_raw_path']).suffix
-    raw_dest = RAW_DIR / f"{safe_name}{raw_ext}"
+    # Lưu vào raw (imagesTr) và processed, meshes
+    raw_dest = RAW_DIR / 'imagesTr' / f"{safe_name}.nii.gz"
+    raw_dest.parent.mkdir(parents=True, exist_ok=True)
     processed_dest = PROCESSED_DIR / f"{safe_name}_seg.nii.gz"
     mesh_dest = MESH_DIR / f"{safe_name}.obj"
 
+    # Kiểm tra xem file gốc đã tồn tại trong raw chưa
+    file_already_in_raw = raw_dest.exists()
+
+    # Nếu file chưa có trong raw thì copy vào raw
+    if not file_already_in_raw and Path(task['temp_raw_path']).exists():
+        shutil.copy2(task['temp_raw_path'], raw_dest)
+
+    # Kiểm tra trùng tên cho processed và meshes
     existing = []
-    if raw_dest.exists(): existing.append('raw')
-    if processed_dest.exists(): existing.append('processed')
-    if mesh_dest.exists(): existing.append('meshes')
+    if processed_dest.exists():
+        existing.append('processed')
+    if mesh_dest.exists():
+        existing.append('meshes')
     if existing:
         return jsonify({'success': False, 'error': f'Tên đã tồn tại trong: {", ".join(existing)}'}), 409
 
     try:
-        if Path(task['temp_raw_path']).exists():
-            shutil.copy2(task['temp_raw_path'], raw_dest)
+        # Lưu processed
         if Path(task['temp_processed_path']).exists():
             shutil.copy2(task['temp_processed_path'], processed_dest)
+        # Lưu mesh (nếu có)
         if task.get('temp_mesh_path') and Path(task['temp_mesh_path']).exists():
             shutil.copy2(task['temp_mesh_path'], mesh_dest)
 
-        # Xóa file tạm
-        for p in [task['temp_raw_path'], task['temp_processed_path'], task.get('temp_mesh_path')]:
+        # Xóa file tạm sau khi lưu
+        for p in [task['temp_raw_path'], task.get('temp_mask_path'), task['temp_processed_path'], task.get('temp_mesh_path')]:
             if p and Path(p).exists():
                 os.remove(p)
 

@@ -16,6 +16,8 @@ def set_seed(seed=42):
 
 def save_checkpoint(model, optimizer, epoch, loss, filepath):
     """Lưu checkpoint model."""
+    # Tự động tạo thư mục nếu chưa tồn tại
+    os.makedirs(os.path.dirname(filepath), exist_ok=True)
     checkpoint = {
         'epoch': epoch,
         'model_state_dict': model.state_dict(),

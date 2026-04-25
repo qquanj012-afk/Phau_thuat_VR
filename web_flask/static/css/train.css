@@ -1,6 +1,8 @@
 /* TRAIN LAYOUT */
 .train-layout{display:grid;grid-template-columns:1fr 1fr;gap:24px}
 .card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius-lg);padding:1.5rem}
+.card-settings{margin-top:16px}
+.card-result{min-height:400px}
 .card-title{font-family:var(--font-mono);font-size:0.75rem;font-weight:500;color:var(--teal);text-transform:uppercase;letter-spacing:0.1em;margin-bottom:1.25rem;display:flex;align-items:center;gap:8px}
 .card-title::before{content:'';display:block;width:3px;height:12px;background:var(--teal);border-radius:2px}
 
@@ -19,10 +21,13 @@
 
 /* DROPZONE */
 .dropzone{border:2px dashed var(--border2);border-radius:var(--radius-lg);padding:3rem 2rem;text-align:center;cursor:pointer;transition:all 0.2s;background:var(--bg3)}
+.dropzone-mask{margin-top:12px}
 .dropzone:hover,.dropzone.drag{border-color:var(--teal3);background:var(--teal-dim2)}
 .drop-icon{font-size:2.5rem;margin-bottom:0.75rem;opacity:0.5}
 .drop-text{font-size:0.85rem;color:var(--text2);margin-bottom:0.25rem}
 .drop-sub{font-size:0.75rem;color:var(--text3)}
+.dropzone-preview {margin-top:12px;max-width:100%;max-height:150px;border-radius:var(--radius);border:1px solid var(--border)}
+.preview-container {display:flex;justify-content:center}
 
 /* TRAIN BUTTON */
 .train-btn{width:100%;padding:12px;background:var(--teal);color:#000;border:none;border-radius:var(--radius);font-family:var(--font-mono);font-size:0.85rem;font-weight:600;cursor:pointer;transition:all 0.15s;text-transform:uppercase;letter-spacing:0.05em;margin-top:1rem}
@@ -30,7 +35,7 @@
 .train-btn:disabled{background:var(--bg4);color:var(--text3);cursor:not-allowed}
 
 /* PROGRESS */
-.progress-wrap{margin-top:1rem;display:none}
+.progress-wrap{margin-top:1rem}
 .progress-label{display:flex;justify-content:space-between;font-family:var(--font-mono);font-size:0.72rem;color:var(--text3);margin-bottom:6px}
 .progress-bar{height:4px;background:var(--bg4);border-radius:2px;overflow:hidden}
 .progress-fill{height:100%;background:var(--teal);width:0;transition:width 0.3s;border-radius:2px}
@@ -41,14 +46,25 @@
 .step-check{width:14px;height:14px;border-radius:50%;border:1px solid currentColor;display:flex;align-items:center;justify-content:center;font-size:9px;flex-shrink:0}
 .step-item.done .step-check{background:var(--teal);color:#000;border-color:var(--teal)}
 
+/* URL STATUS */
+.url-status{font-family:var(--font-mono);font-size:0.7rem;margin-top:4px}
+.url-status.valid{color:var(--teal)}
+.url-status.invalid{color:var(--danger)}
+
 /* RESULT PREVIEW */
-.result-preview{display:none}
+.result-empty{display:flex;flex-direction:column;align-items:center;justify-content:center;height:320px;color:var(--text3)}
+.result-empty-icon{font-size:3rem;margin-bottom:1rem;opacity:0.3}
+.result-empty-text{font-family:var(--font-mono);font-size:0.8rem}
+.result-empty-hint{font-size:0.75rem;margin-top:4px}
+.result-header{display:flex;gap:8px;margin-bottom:12px}
+.result-status{font-family:var(--font-mono);font-size:0.75rem;color:var(--teal)}
 .preview-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:1rem}
 .preview-img{background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius);aspect-ratio:1;display:flex;align-items:center;justify-content:center;font-size:0.75rem;color:var(--text3);overflow:hidden;position:relative}
 .preview-img img{width:100%;height:100%;object-fit:cover}
 .preview-tag{position:absolute;top:6px;left:6px;font-family:var(--font-mono);font-size:0.65rem;padding:2px 7px;border-radius:20px}
 .tag-raw{background:rgba(77,159,255,0.15);color:var(--info)}
 .tag-proc{background:rgba(0,212,170,0.15);color:var(--teal)}
+.tag-mesh{background:rgba(255,179,71,0.15);color:var(--warning)}
 
 /* RESULT ACTIONS */
 .result-actions{display:flex;gap:8px}
@@ -57,69 +73,5 @@
 .btn-del{flex:1;padding:10px;background:rgba(255,77,109,0.12);color:var(--danger);border:1px solid rgba(255,77,109,0.3);border-radius:var(--radius);font-family:var(--font-mono);font-size:0.8rem;cursor:pointer;transition:all 0.15s}
 .btn-del:hover{background:rgba(255,77,109,0.2)}
 
-/* URL STATUS */
-.url-status {
-  font-family: var(--font-mono);
-  font-size: 0.7rem;
-  margin-top: 4px;
-}
-.url-status.valid {
-  color: var(--teal);
-}
-.url-status.invalid {
-  color: var(--danger);
-}
-
-/* MESH TAG */
-.tag-mesh {
-  background: rgba(255, 179, 71, 0.15);
-  color: var(--warning);
-}
-
-/* PROGRESS BAR (đảm bảo hiển thị) */
-.progress-wrap {
-  margin-top: 1rem;
-  display: none;
-}
-.progress-bar {
-  height: 4px;
-  background: var(--bg4);
-  border-radius: 2px;
-  overflow: hidden;
-}
-.progress-fill {
-  height: 100%;
-  background: var(--teal);
-  width: 0%;
-  transition: width 0.3s;
-  border-radius: 2px;
-}
-.step-item .step-check {
-  width: 14px;
-  height: 14px;
-  border-radius: 50%;
-  border: 1px solid currentColor;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 9px;
-  flex-shrink: 0;
-}
-.step-item.done .step-check {
-  background: var(--teal);
-  color: #000;
-  border-color: var(--teal);
-}
-
-/* DROPZONE PREVIEW */
-.dropzone-preview {
-  margin-top: 12px;
-  max-width: 100%;
-  max-height: 150px;
-  border-radius: var(--radius);
-  border: 1px solid var(--border);
-}
-.preview-container {
-  display: flex;
-  justify-content: center;
-}
+/* HIDDEN */
+.hidden{display:none}

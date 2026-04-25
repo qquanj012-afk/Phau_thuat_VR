@@ -16,38 +16,47 @@ function switchMethod(method) {
 }
 
 function initFileUpload() {
-  const dropzone = document.getElementById('dropzone');
-  const dropText = document.getElementById('drop-text');
-  const fileInput = document.getElementById('file-input');
-  const previewContainer = document.getElementById('file-preview-container');
-  const previewImg = document.getElementById('file-preview-img');
+  function setupDropzone(dropzoneId, dropTextId, fileInputId, previewContainerId, previewImgId) {
+    const dropzone = document.getElementById(dropzoneId);
+    const dropText = document.getElementById(dropTextId);
+    const fileInput = document.getElementById(fileInputId);
+    const previewContainer = document.getElementById(previewContainerId);
+    const previewImg = document.getElementById(previewImgId);
 
-  function handleFile(file) {
+    if (!dropzone || !dropText || !fileInput) return;
+
+    dropzone.addEventListener('dragover', e => { e.preventDefault(); dropzone.classList.add('drag'); });
+    dropzone.addEventListener('dragleave', () => dropzone.classList.remove('drag'));
+    dropzone.addEventListener('drop', e => {
+      e.preventDefault();
+      dropzone.classList.remove('drag');
+      const file = e.dataTransfer.files[0];
+      if (file) handleFile(file, dropText, previewContainer, previewImg);
+    });
+    fileInput.addEventListener('change', function() {
+      if (this.files[0]) handleFile(this.files[0], dropText, previewContainer, previewImg);
+    });
+  }
+
+  async function handleFile(file, dropText, previewContainer, previewImg) {
     dropText.textContent = '✓ ' + file.name;
-    if (file.type.startsWith('image/')) {
-      const reader = new FileReader();
-      reader.onload = e => {
-        previewImg.src = e.target.result;
-        previewContainer.style.display = 'block';
-      };
-      reader.readAsDataURL(file);
-    } else {
-      previewContainer.style.display = 'none';
+    const formData = new FormData();
+    formData.append('file', file);
+    try {
+      const res = await fetch('/train/preview', { method: 'POST', body: formData });
+      const data = await res.json();
+      if (data.thumb_url && previewImg) {
+        previewImg.src = data.thumb_url;
+        if (previewContainer) previewContainer.style.display = 'block';
+      }
+    } catch (e) {
+      console.error('Preview failed', e);
+      if (previewContainer) previewContainer.style.display = 'none';
     }
   }
 
-  dropzone.addEventListener('dragover', e => { e.preventDefault(); dropzone.classList.add('drag'); });
-  dropzone.addEventListener('dragleave', () => dropzone.classList.remove('drag'));
-  dropzone.addEventListener('drop', e => {
-    e.preventDefault();
-    dropzone.classList.remove('drag');
-    const file = e.dataTransfer.files[0];
-    if (file) handleFile(file);
-  });
-  dropzone.addEventListener('click', () => fileInput.click());
-  fileInput.addEventListener('change', function() {
-    if (this.files[0]) handleFile(this.files[0]);
-  });
+  setupDropzone('dropzone-ct', 'drop-text-ct', 'file-input-ct', 'file-preview-container-ct', 'file-preview-img-ct');
+  setupDropzone('dropzone-mask', 'drop-text-mask', 'file-input-mask', 'file-preview-container-mask', 'file-preview-img-mask');
 }
 
 async function validateUrl(url) {
@@ -56,11 +65,6 @@ async function validateUrl(url) {
     statusEl.textContent = 'Vui lòng nhập URL';
     statusEl.className = 'url-status invalid';
     return false;
-  }
-  if (url.startsWith('data:image/')) {
-    statusEl.textContent = 'Data URL hợp lệ';
-    statusEl.className = 'url-status valid';
-    return true;
   }
   try { new URL(url); } catch {
     statusEl.textContent = 'URL không hợp lệ';
@@ -106,20 +110,34 @@ function startTraining() {
   }
 
   const isFileMode = document.getElementById('file-panel').style.display !== 'none';
+  const formData = new FormData();
+  formData.append('model', document.getElementById('model-select').value);
+  formData.append('threshold', document.getElementById('threshold').value);
 
-  if (!isFileMode) {
+  if (isFileMode) {
+    const ctFile = document.getElementById('file-input-ct').files[0];
+    if (!ctFile) { showToast('Vui lòng chọn file CT', true); return; }
+    formData.append('file', ctFile);
+
+    const maskFile = document.getElementById('file-input-mask').files[0];
+    if (maskFile) formData.append('mask', maskFile);
+  } else {
     const url = document.getElementById('img-url').value.trim();
     const label = document.getElementById('img-label').value.trim();
-    if (!url) { showToast('Vui lòng nhập URL ảnh', true); return; }
+    if (!url) { showToast('Vui lòng nhập URL ảnh CT', true); return; }
     if (!label) { showToast('Vui lòng nhập Tên bệnh nhân', true); return; }
+
     const statusEl = document.getElementById('url-status');
     if (statusEl.classList.contains('invalid')) {
       showToast('URL không hợp lệ hoặc không hỗ trợ', true);
       return;
     }
-  } else {
-    const file = document.getElementById('file-input').files[0];
-    if (!file) { showToast('Vui lòng chọn file', true); return; }
+
+    formData.append('url', url);
+    formData.append('label', label);
+
+    const maskUrl = document.getElementById('mask-url').value.trim();
+    if (maskUrl) formData.append('mask_url', maskUrl);
   }
 
   const btn = document.getElementById('train-btn');
@@ -134,19 +152,6 @@ function startTraining() {
     const el = document.getElementById('step-' + i);
     el.className = 'step-item';
     el.querySelector('.step-check').textContent = '○';
-  }
-
-  const model = document.getElementById('model-select').value;
-  const threshold = document.getElementById('threshold').value;
-  const formData = new FormData();
-  formData.append('model', model);
-  formData.append('threshold', threshold);
-
-  if (isFileMode) {
-    formData.append('file', document.getElementById('file-input').files[0]);
-  } else {
-    formData.append('url', document.getElementById('img-url').value.trim());
-    formData.append('label', document.getElementById('img-label').value.trim());
   }
 
   fetch('/train/start', { method: 'POST', body: formData })
@@ -200,10 +205,6 @@ function startTraining() {
                   } else {
                     meshContainer.style.display = 'none';
                   }
-                  document.getElementById('result-acc').textContent = (result.accuracy || 94.8).toFixed(1) + '%';
-                  document.getElementById('tumor-size').textContent = result.tumor_size || '2.4 × 3.1 × 2.8 cm';
-                  document.getElementById('tumor-location').textContent = result.location || 'Thùy gan phải, segment VI';
-                  document.getElementById('dice-coeff').textContent = result.dice || '0.891';
                   showToast('✓ Huấn luyện hoàn tất');
                   resetTrainButton();
                   pw.style.display = 'none';
@@ -282,17 +283,15 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('saveResultBtn').addEventListener('click', saveResult);
   document.getElementById('deleteResultBtn').addEventListener('click', deleteResult);
 
-  // Ẩn RAW ngay từ đầu
-  const rawContainer = document.getElementById('preview-raw-container');
-  if (rawContainer) rawContainer.style.display = 'none';
-
   document.getElementById('preview-processed-container')?.addEventListener('click', () => openResultModal('processed'));
   document.getElementById('preview-mesh-container')?.addEventListener('click', () => openResultModal('mesh'));
 
   const urlInput = document.getElementById('img-url');
-  urlInput.addEventListener('blur', async () => {
-    const url = urlInput.value.trim();
-    if (url) await validateUrl(url);
-    else document.getElementById('url-status').textContent = '';
-  });
+  if (urlInput) {
+    urlInput.addEventListener('blur', async () => {
+      const url = urlInput.value.trim();
+      if (url) await validateUrl(url);
+      else document.getElementById('url-status').textContent = '';
+    });
+  }
 });

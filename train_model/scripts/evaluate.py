@@ -1,3 +1,4 @@
+# train_model/scripts/evaluate.py
 import sys
 import argparse
 from pathlib import Path
@@ -22,7 +23,6 @@ def dice_score(pred, target, smooth=1e-5):
 def evaluate_model(model_type: str):
     device = get_device()
 
-    # 1. Load model
     ckpt_name = "liver_model.pth" if model_type == "liver" else "tumor_model.pth"
     ckpt_path = CHECKPOINTS_DIR / ckpt_name
     if not ckpt_path.exists():
@@ -35,14 +35,13 @@ def evaluate_model(model_type: str):
     model.load_state_dict(state_dict)
     model.eval()
 
-    # 2. Load test data
     data_dir = PROCESSED_DIR / model_type
     if not data_dir.exists():
         print(f"❌ Không tìm thấy dữ liệu test tại {data_dir}")
         sys.exit(1)
 
     dataset = LiverTumorDataset(data_dir)
-    print(f"📊 Đánh giá trên {len(dataset)} mẫu...")
+    print(f"📊 Đánh giá trên {len(dataset)} slices...")
 
     dice_scores = []
     for idx in tqdm(range(len(dataset)), desc="Evaluating"):

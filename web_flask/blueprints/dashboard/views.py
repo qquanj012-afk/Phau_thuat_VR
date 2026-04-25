@@ -2,37 +2,27 @@ import os
 from datetime import datetime, timedelta, date
 from flask import Blueprint, render_template, jsonify, request
 from pathlib import Path
+from web_flask.utils.data_counts import *
 
 dashboard_bp = Blueprint('dashboard', __name__, template_folder='../../templates')
 
-# Đường dẫn dữ liệu
-BASE_DIR = Path(__file__).resolve().parent.parent.parent.parent  # web_flask/blueprints/dashboard -> gốc dự án
-BACKEND_DATA_DIR = BASE_DIR / 'data'
-MEDICAL_EXTS = {'.nii', '.nii.gz', '.dcm', '.dicom', '.png', '.jpg', '.jpeg', '.npy'}
-MESH_EXTS = {'.obj', '.stl', '.ply'}
-
-def count_files_in_dir(path, extensions):
-    if not path.exists():
-        return 0
-    total = 0
-    for root, _, files in os.walk(path):
+# Hàm đếm số file _img.npy theo ngày (cho processed)
+def get_daily_processed_counts(directory, start_date, end_date):
+    """Đếm số file _img.npy trong thư mục, nhóm theo ngày."""
+    counts = {}
+    if not directory.exists():
+        return counts
+    for root, _, files in os.walk(directory):
         for f in files:
-            if any(f.lower().endswith(ext) for ext in extensions):
-                total += 1
-    return total
+            if f.endswith('_img.npy'):
+                full = Path(root) / f
+                mtime = datetime.fromtimestamp(full.stat().st_mtime)
+                if start_date <= mtime < end_date:
+                    day = mtime.strftime('%Y-%m-%d')
+                    counts[day] = counts.get(day, 0) + 1
+    return counts
 
-def get_raw_count():
-    raw_path = BACKEND_DATA_DIR / 'raw' / 'liver'
-    return count_files_in_dir(raw_path, MEDICAL_EXTS)
-
-def get_processed_count():
-    return count_files_in_dir(BACKEND_DATA_DIR / 'processed' / 'liver', MEDICAL_EXTS) + \
-           count_files_in_dir(BACKEND_DATA_DIR / 'processed' / 'tumor', MEDICAL_EXTS)
-
-def get_mesh_count():
-    return count_files_in_dir(BACKEND_DATA_DIR / 'meshes' / 'liver', MESH_EXTS) + \
-           count_files_in_dir(BACKEND_DATA_DIR / 'meshes' / 'tumor', MESH_EXTS)
-
+# Hàm đếm theo extensions chung cho raw và mesh
 def get_daily_counts(directory, extensions, start_date, end_date):
     counts = {}
     if not directory.exists():
@@ -93,32 +83,36 @@ def api_timeseries():
     except:
         return jsonify({'error': 'Định dạng ngày không hợp lệ'}), 400
 
-    raw_dir = BACKEND_DATA_DIR / 'raw' / 'liver'
-    proc_dir = [
-        BACKEND_DATA_DIR / 'processed' / 'liver',
-        BACKEND_DATA_DIR / 'processed' / 'tumor'
+    # Raw: gồm cả liver và tumor
+    raw_dirs = [
+        DATA_DIR / 'raw' / 'liver' / 'imagesTr',
+        DATA_DIR / 'raw' / 'tumor'
     ]
-    mesh_dir = [
-        BACKEND_DATA_DIR / 'meshes' / 'liver',
-        BACKEND_DATA_DIR / 'meshes' / 'tumor'
-    ]
-
-    raw_counts = get_daily_counts(raw_dir, MEDICAL_EXTS, start_date, end_date)
-    proc_counts = {}
-    for d in proc_dir:
+    raw_counts = {}
+    for d in raw_dirs:
         for day, cnt in get_daily_counts(d, MEDICAL_EXTS, start_date, end_date).items():
+            raw_counts[day] = raw_counts.get(day, 0) + cnt
+
+    # Processed: chỉ đếm _img.npy
+    proc_dirs = [
+        DATA_DIR / 'processed' / 'liver',
+        DATA_DIR / 'processed' / 'tumor'
+    ]
+    proc_counts = {}
+    for d in proc_dirs:
+        for day, cnt in get_daily_processed_counts(d, start_date, end_date).items():
             proc_counts[day] = proc_counts.get(day, 0) + cnt
-    mesh_counts = {}
-    for d in mesh_dir:
-        for day, cnt in get_daily_counts(d, MESH_EXTS, start_date, end_date).items():
-            mesh_counts[day] = mesh_counts.get(day, 0) + cnt
+
+    # Mesh: toàn bộ meshes
+    mesh_dir = DATA_DIR / 'meshes'
+    mesh_counts = get_daily_counts(mesh_dir, MESH_EXTS, start_date, end_date)
+
     all_days = []
     current = start_date
     while current < end_date:
         all_days.append(current.strftime('%Y-%m-%d'))
         current += timedelta(days=1)
 
-    # Chuyển từ daily count sang cumulative (tích lũy)
     raw_cumulative = []
     proc_cumulative = []
     mesh_cumulative = []
