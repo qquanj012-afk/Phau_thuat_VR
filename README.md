@@ -117,3 +117,36 @@ Phau_thuat_VR/
 ├── README.txt
 └── requirements.txt
 ```
+
+
+---
+
+## 2. Luồng hoạt động chính
+
+### A. Chuẩn bị dữ liệu
+- Đặt ảnh CT (.nii) vào `data/raw/liver/imagesTr/`
+- Mask tương ứng (nhãn gan/u) vào `data/raw/liver/labelsTr/`
+
+### B. Huấn luyện mô hình
+```bash
+# Tiền xử lý ảnh gan
+python train_model/scripts/process_liver.py
+
+# Huấn luyện U‑Net gan
+python train_model/scripts/train_liver.py
+
+# Tiền xử lý & huấn luyện khối u
+python train_model/scripts/process_tumor.py
+python train_model/scripts/train_tumor.py
+```
+- Checkpoint được lưu vào `train_model/checkpoints/`
+
+### C. Tạo mesh
+```bash
+# Tạo ảnh 3D .obj
+python train_model/scripts/mesh_generator.py
+```
+
+## 3. Quản lý dữ liệu
+- Archive (/archive): Xem, tải, xóa file raw/processed/meshes, thùng rác.
+- Dashboard (/dashboard): biểu đồ thống kê số lượng file theo thời gian.
