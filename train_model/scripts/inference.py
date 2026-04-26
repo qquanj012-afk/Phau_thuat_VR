@@ -23,8 +23,10 @@ def run_inference(input_path: str, output_path: str, model_type: str, threshold:
     ckpt_name = "liver_model.pth" if model_type == "liver" else "tumor_model.pth"
     ckpt_path = CHECKPOINTS_DIR / ckpt_name
     if not ckpt_path.exists():
-        print(f"❌ Không tìm thấy checkpoint: {ckpt_path}")
+        print(f"❌ Không tìm thấy checkpoint: {ckpt_path}", flush=True)
         sys.exit(1)
+
+    print("PROGRESS:10", flush=True)
 
     # 2. Load model
     model = UNet(n_channels=3, n_classes=1).to(device)
@@ -33,40 +35,60 @@ def run_inference(input_path: str, output_path: str, model_type: str, threshold:
     model.load_state_dict(state_dict)
     model.eval()
 
+    print("PROGRESS:20", flush=True)
+
     # 3. Tiền xử lý ảnh
-    print(f"🔄 Đang tiền xử lý ảnh: {input_path}")
+    print(f"🔄 Đang tiền xử lý ảnh: {input_path}", flush=True)
     X = load_and_preprocess_volume(input_path, window_type=model_type)  # (Slices, H, W, C)
 
-    # 4. Chạy inference
+    print("PROGRESS:35", flush=True)
+
+    # 4. Chạy inference — báo tiến trình theo từng lát cắt
+    total_slices = len(X)
     all_masks = []
     with torch.no_grad():
-        for slice_data in X:
-            input_tensor = torch.from_numpy(slice_data).permute(2, 0, 1).unsqueeze(0).float().to(device)
+        for i, slice_data in enumerate(X):
+            input_tensor = (
+                torch.from_numpy(slice_data)
+                .permute(2, 0, 1)
+                .unsqueeze(0)
+                .float()
+                .to(device)
+            )
             pred = torch.sigmoid(model(input_tensor))
             mask = (pred > threshold).cpu().numpy().squeeze()
             all_masks.append(mask)
+
+            # PROGRESS 35 → 85 trong quá trình inference
+            pct = 35 + int((i + 1) / total_slices * 50)
+            print(f"PROGRESS:{pct}", flush=True)
+
+    print("PROGRESS:88", flush=True)
 
     final_mask = np.stack(all_masks, axis=-1).astype(np.uint8)
 
     # 5. Lưu kết quả
     mask_img = nib.Nifti1Image(final_mask, affine=np.eye(4))
     nib.save(mask_img, output_path)
+    print(f"✅ Đã lưu mask: {output_path}", flush=True)
+
+    print("PROGRESS:93", flush=True)
 
     # Lưu ảnh PNG preview lát giữa
     png_path = Path(output_path).with_suffix(".png")
     mid_slice = final_mask[:, :, final_mask.shape[2] // 2] * 255
     cv2.imwrite(str(png_path), mid_slice)
+    print(f"✅ Đã lưu preview: {png_path}", flush=True)
 
-    print(f"✅ Đã lưu mask: {output_path}")
-    print(f"✅ Đã lưu preview: {png_path}")
+    print("PROGRESS:100", flush=True)
 
 
 def main():
     parser = argparse.ArgumentParser(description="Inference ảnh CT đơn lẻ.")
-    parser.add_argument("--input", required=True, help="Đường dẫn ảnh đầu vào")
-    parser.add_argument("--output", required=True, help="Đường dẫn lưu mask (.nii.gz)")
+    parser.add_argument("--input",      required=True, help="Đường dẫn ảnh đầu vào")
+    parser.add_argument("--output",     required=True, help="Đường dẫn lưu mask (.nii.gz)")
     parser.add_argument("--model_type", choices=["liver", "tumor"], default="liver")
-    parser.add_argument("--threshold", type=float, default=INFERENCE_THRESHOLD)
+    parser.add_argument("--threshold",  type=float, default=INFERENCE_THRESHOLD)
     args = parser.parse_args()
 
     run_inference(args.input, args.output, args.model_type, args.threshold)
