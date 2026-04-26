@@ -1,5 +1,7 @@
 let currentTaskId = null;
 let trainingInterval = null;
+window.currentMode = 'url'; // 'url' hoặc 'file'
+
 const steps = [
   'Load & validate ảnh',
   'Preprocessing (normalization)',
@@ -8,13 +10,16 @@ const steps = [
   'Tạo output processed image'
 ];
 
+// Chuyển đổi chế độ nhập liệu
 function switchMethod(method) {
+  window.currentMode = method;
   document.getElementById('method-url').classList.toggle('active', method === 'url');
   document.getElementById('method-file').classList.toggle('active', method === 'file');
-  document.getElementById('url-panel').style.display = method === 'url' ? '' : 'none';
-  document.getElementById('file-panel').style.display = method === 'file' ? '' : 'none';
+  document.getElementById('url-panel').classList.toggle('hidden', method !== 'url');
+  document.getElementById('file-panel').classList.toggle('hidden', method !== 'file');
 }
 
+// Khởi tạo drag & drop + click chọn file
 function initFileUpload() {
   function setupDropzone(dropzoneId, dropTextId, fileInputId, previewContainerId, previewImgId) {
     const dropzone = document.getElementById(dropzoneId);
@@ -25,16 +30,42 @@ function initFileUpload() {
 
     if (!dropzone || !dropText || !fileInput) return;
 
-    dropzone.addEventListener('dragover', e => { e.preventDefault(); dropzone.classList.add('drag'); });
-    dropzone.addEventListener('dragleave', () => dropzone.classList.remove('drag'));
-    dropzone.addEventListener('drop', e => {
-      e.preventDefault();
-      dropzone.classList.remove('drag');
-      const file = e.dataTransfer.files[0];
-      if (file) handleFile(file, dropText, previewContainer, previewImg);
+    // Ngăn chặn hành vi mặc định trên tất cả phần tử con
+    const allElements = [dropzone, ...dropzone.querySelectorAll('*')];
+    allElements.forEach(el => {
+      el.addEventListener('dragover', e => {
+        e.preventDefault();
+        e.stopPropagation();
+        dropzone.classList.add('drag');
+      });
+      el.addEventListener('dragleave', e => {
+        e.preventDefault();
+        e.stopPropagation();
+        dropzone.classList.remove('drag');
+      });
+      el.addEventListener('drop', e => {
+        e.preventDefault();
+        e.stopPropagation();
+        dropzone.classList.remove('drag');
+        const file = e.dataTransfer.files[0];
+        if (file) {
+          // Gán file vào input để form có thể đọc được
+          const dt = new DataTransfer();
+          dt.items.add(file);
+          fileInput.files = dt.files;
+          handleFile(file, dropText, previewContainer, previewImg);
+        }
+      });
     });
+
+    // Click mở hộp thoại chọn file
+    dropzone.addEventListener('click', () => fileInput.click());
+
+    // Khi chọn file qua hộp thoại
     fileInput.addEventListener('change', function() {
-      if (this.files[0]) handleFile(this.files[0], dropText, previewContainer, previewImg);
+      if (this.files[0]) {
+        handleFile(this.files[0], dropText, previewContainer, previewImg);
+      }
     });
   }
 
@@ -59,6 +90,7 @@ function initFileUpload() {
   setupDropzone('dropzone-mask', 'drop-text-mask', 'file-input-mask', 'file-preview-container-mask', 'file-preview-img-mask');
 }
 
+// Validate URL
 async function validateUrl(url) {
   const statusEl = document.getElementById('url-status');
   if (!url) {
@@ -96,12 +128,7 @@ async function validateUrl(url) {
   }
 }
 
-function resetTrainButton() {
-  const btn = document.getElementById('train-btn');
-  btn.disabled = false;
-  btn.textContent = '▶ BẮT ĐẦU HUẤN LUYỆN';
-}
-
+// Huấn luyện
 function startTraining() {
   // Clear interval cũ nếu có
   if (trainingInterval) {
@@ -109,18 +136,19 @@ function startTraining() {
     trainingInterval = null;
   }
 
-  const isFileMode = document.getElementById('file-panel').style.display !== 'none';
+  const isFileMode = window.currentMode === 'file';
   const formData = new FormData();
   formData.append('model', document.getElementById('model-select').value);
   formData.append('threshold', document.getElementById('threshold').value);
 
   if (isFileMode) {
-    const ctFile = document.getElementById('file-input-ct').files[0];
+    const ctInput = document.getElementById('file-input-ct');
+    const ctFile = ctInput.files[0];
     if (!ctFile) { showToast('Vui lòng chọn file CT', true); return; }
     formData.append('file', ctFile);
 
-    const maskFile = document.getElementById('file-input-mask').files[0];
-    if (maskFile) formData.append('mask', maskFile);
+    const maskInput = document.getElementById('file-input-mask');
+    if (maskInput.files[0]) formData.append('mask', maskInput.files[0]);
   } else {
     const url = document.getElementById('img-url').value.trim();
     const label = document.getElementById('img-label').value.trim();
@@ -140,6 +168,7 @@ function startTraining() {
     if (maskUrl) formData.append('mask_url', maskUrl);
   }
 
+  // Reset giao diện
   const btn = document.getElementById('train-btn');
   btn.disabled = true;
   btn.textContent = '⟳ ĐANG CHẠY...';
@@ -272,6 +301,12 @@ function openResultModal(type) {
   if (img && img.src) {
     openModal(img.src, type === 'processed' ? 'Ảnh PROCESSED' : 'Mesh 3D');
   }
+}
+
+function resetTrainButton() {
+  const btn = document.getElementById('train-btn');
+  btn.disabled = false;
+  btn.textContent = '▶ BẮT ĐẦU HUẤN LUYỆN';
 }
 
 document.addEventListener('DOMContentLoaded', () => {
